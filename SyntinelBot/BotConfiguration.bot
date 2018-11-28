@@ -1,13 +1,21 @@
-﻿{
+{
   "name": "SyntinelBot",
   "services": [
     {
       "type": "endpoint",
       "name": "development",
       "endpoint": "http://localhost:3978/api/messages",
-      "appId": "",
-      "appPassword": "",
+      "appId": "b4e8dc4d-86fd-4675-bee0-00d4ecc35f4d",
+      "appPassword": "pdwMACG16)^(hfdpXSE823-",
       "id": "1"
+    },
+    {
+      "type": "endpoint",
+      "appId": "b4e8dc4d-86fd-4675-bee0-00d4ecc35f4d",
+      "appPassword": "pdwMACG16)^(hfdpXSE823-",
+      "endpoint": "https://syntinelbot2.azurewebsites.net/api/messages",
+      "id": "2",
+      "name": "production"
     }
   ],
   "padlock": "",

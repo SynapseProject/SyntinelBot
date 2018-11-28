@@ -1,0 +1,73 @@
+{
+  "type": "AdaptiveCard",
+  "body": [
+    {
+      "type": "TextBlock",
+      "horizontalAlignment": "Left",
+      "size": "Medium",
+      "weight": "Bolder",
+      "color": "Good",
+      "text": "Resize WU2P103170008"
+    },
+    {
+      "type": "Container",
+      "items": [
+        {
+          "type": "TextBlock",
+          "text": "WU2P103170008 is 43% utilized past 7 days. Would you like to resize it?",
+          "wrap": true
+        }
+      ]
+    },
+    {
+      "id": "instanceType",
+      "type": "Input.ChoiceSet",
+      "separator": true,
+      "style": "compact",
+      "value": "t2.medium",
+      "placeholder": "Placeholder text",
+      "choices": [
+        {
+          "title": "t2.nano",
+          "value": "t2.nano"
+        },
+        {
+          "title": "t2.micro",
+          "value": "t2.micro"
+        },
+        {
+          "title": "t2.medium",
+          "value": "t2.medium"
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "type": "Action.Submit",
+      "title": "Resize",
+      "data": {
+        "msteams": {
+          "type": "messageBack",
+          "displayText": "Resize",
+          "text": "text to bots",
+          "value": "{\"action\": \"resize\"}"
+        }
+      }
+    },
+    {
+      "type": "Action.Submit",
+      "title": "Ignore",
+      "data": {
+        "msteams": {
+          "type": "messageBack",
+          "displayText": "Ignore",
+          "text": "text to bots",
+          "value": "{\"action\": \"ignore\"}"
+        }
+      }
+    }
+  ],
+  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+  "version": "1.0"
+}
