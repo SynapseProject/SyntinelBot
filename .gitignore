@@ -260,3 +260,4 @@ paket-files/
 __pycache__/
 *.pyc
 /SyntinelBot/Properties/PublishProfiles/SyntinelBot2 - Web Deploy.pubxml
+/SyntinelBot/syntinel.bot
