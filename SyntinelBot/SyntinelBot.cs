@@ -10,6 +10,7 @@ using Microsoft.Bot.Builder;
 using Microsoft.Bot.Connector;
 using Microsoft.Bot.Connector.Authentication;
 using Microsoft.Bot.Schema;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -31,6 +32,8 @@ namespace SyntinelBot
     {
         private readonly EchoBotAccessors _accessors;
         private readonly ILogger _logger;
+        private IConfiguration _config;
+        private RegisteredUsers _registeredUsers;
 
         private const string WelcomeText = @"Welcome to Syntinel channel. Syntinel Bot is at your service.";
 
@@ -46,16 +49,25 @@ namespace SyntinelBot
         /// <param name="accessors">A class containing <see cref="IStatePropertyAccessor{T}"/> used to manage state.</param>
         /// <param name="loggerFactory">A <see cref="ILoggerFactory"/> that is hooked to the Azure App Service provider.</param>
         /// <seealso cref="https://docs.microsoft.com/en-us/aspnet/core/fundamentals/logging/?view=aspnetcore-2.1#windows-eventlog-provider"/>
-        public SyntinelBot(EchoBotAccessors accessors, ILoggerFactory loggerFactory)
+        public SyntinelBot(EchoBotAccessors accessors, ILoggerFactory loggerFactory, IConfiguration config)
         {
             if (loggerFactory == null)
             {
                 throw new System.ArgumentNullException(nameof(loggerFactory));
             }
 
+            if (config == null)
+            {
+                throw new System.ArgumentNullException(nameof(config));
+            }
             _logger = loggerFactory.CreateLogger<SyntinelBot>();
             _logger.LogTrace("EchoBot turn start.");
             _accessors = accessors ?? throw new System.ArgumentNullException(nameof(accessors));
+
+            _config = config;
+
+            _registeredUsers = _config.Get<RegisteredUsers>();
+            _logger.LogInformation($"Registered User Count: {_registeredUsers?.Users.Count}");
         }
 
         /// <summary>
@@ -99,6 +111,15 @@ namespace SyntinelBot
                 //var responseMessage = $"Turn {state.TurnCount}: You sent '{turnContext.Activity.Text}'\n";
                 //await turnContext.SendActivityAsync(responseMessage);
                 if (!string.IsNullOrWhiteSpace(turnContext.Activity.Text) &&
+                    turnContext.Activity.Text.ToLowerInvariant().Replace("<at>syntinelbot2</at>", string.Empty).Trim() == "hi")
+                {
+                    Random r = new Random();
+                    var cardAttachment = CreateAdaptiveCardAttachment(this._cards[r.Next(this._cards.Length)]);
+                    var reply = turnContext.Activity.CreateReply();
+                    reply.Attachments = new List<Attachment>() { cardAttachment };
+                    await turnContext.SendActivityAsync("Hi, how are you");
+                }
+                else if (!string.IsNullOrWhiteSpace(turnContext.Activity.Text) &&
                     turnContext.Activity.Text.ToLowerInvariant().Replace("<at>syntinelbot2</at>", string.Empty).Trim() == "notify")
                 {
                     Random r = new Random();
