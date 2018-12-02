@@ -24,6 +24,7 @@ namespace SyntinelBot
     {
         private ILoggerFactory _loggerFactory;
         private bool _isProduction = false;
+        private static IStorage _dataStore = null;
 
         public Startup(IHostingEnvironment env)
         {
@@ -44,6 +45,8 @@ namespace SyntinelBot
         /// The <see cref="IConfiguration"/> that represents a set of key/value application configuration properties.
         /// </value>
         public IConfiguration Configuration { get; }
+
+        public static IStorage DataStore => _dataStore;
 
         /// <summary>
         /// This method gets called by the runtime. Use this method to add services to the container.
@@ -86,6 +89,7 @@ namespace SyntinelBot
                 // The Memory Storage used here is for local bot debugging only. When the bot
                 // is restarted, everything stored in memory will be gone.
                 IStorage dataStore = new MemoryStorage();
+                _dataStore = dataStore;
 
                 // For production bots use the Azure Blob or
                 // Azure CosmosDB storage providers. For the Azure

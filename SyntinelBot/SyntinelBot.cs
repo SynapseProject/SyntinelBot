@@ -35,13 +35,15 @@ namespace SyntinelBot
         private readonly ILogger _logger;
         private IConfiguration _config;
         private RegisteredUsers _registeredUsers;
+        private IStorage _dataStore;
 
         private const string WelcomeText = @"Welcome to Syntinel channel. Syntinel Bot is at your service.";
 
         // This array contains the file location of our adaptive cards
         private readonly string[] _cards =
         {
-            @".\Resources\Ec2ResizeCard.json"
+            @".\Resources\Ec2Resize.msteams.json",
+            @".\Resources\Ec2Resize.slack.json"
         };
 
         /// <summary>
@@ -61,6 +63,7 @@ namespace SyntinelBot
             {
                 throw new System.ArgumentNullException(nameof(config));
             }
+
             _logger = loggerFactory.CreateLogger<SyntinelBot>();
             _logger.LogTrace("EchoBot turn start.");
             _accessors = accessors ?? throw new System.ArgumentNullException(nameof(accessors));
@@ -69,6 +72,8 @@ namespace SyntinelBot
 
             _registeredUsers = _config.Get<RegisteredUsers>();
             _logger.LogInformation($"Registered User Count: {_registeredUsers?.Users.Count}");
+
+            _dataStore = Startup.DataStore;
         }
 
         /// <summary>
@@ -141,6 +146,11 @@ namespace SyntinelBot
                           $"Notifications: {state.Notifications.Count} " +
                           $"Jobs: {state.Jobs.Count}";
                 await turnContext.SendActivityAsync(msg);
+
+                if (_dataStore != null)
+                {
+                    var abc = await _dataStore.ReadAsync(new[] { "BotAccessors.UserState" }, cancellationToken);
+                }
 
                 if (!string.IsNullOrWhiteSpace(turnContext.Activity.Text) &&
                     turnContext.Activity.Text.ToLowerInvariant().Replace("<at>syntinelbot2</at>", string.Empty).Trim() == "hi")
