@@ -14,6 +14,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using SyntinelBot.Models;
 
 namespace SyntinelBot
 {
@@ -30,7 +31,7 @@ namespace SyntinelBot
     /// <seealso cref="https://docs.microsoft.com/en-us/aspnet/core/fundamentals/dependency-injection?view=aspnetcore-2.1"/>
     public class SyntinelBot : IBot
     {
-        private readonly EchoBotAccessors _accessors;
+        private readonly BotAccessors _accessors;
         private readonly ILogger _logger;
         private IConfiguration _config;
         private RegisteredUsers _registeredUsers;
@@ -49,7 +50,7 @@ namespace SyntinelBot
         /// <param name="accessors">A class containing <see cref="IStatePropertyAccessor{T}"/> used to manage state.</param>
         /// <param name="loggerFactory">A <see cref="ILoggerFactory"/> that is hooked to the Azure App Service provider.</param>
         /// <seealso cref="https://docs.microsoft.com/en-us/aspnet/core/fundamentals/logging/?view=aspnetcore-2.1#windows-eventlog-provider"/>
-        public SyntinelBot(EchoBotAccessors accessors, ILoggerFactory loggerFactory, IConfiguration config)
+        public SyntinelBot(BotAccessors accessors, ILoggerFactory loggerFactory, IConfiguration config)
         {
             if (loggerFactory == null)
             {
@@ -95,21 +96,52 @@ namespace SyntinelBot
             // see https://aka.ms/about-bot-activity-message to learn more about the message and other activity types
             if (turnContext.Activity.Type == ActivityTypes.Message)
             {
-                //// Get the conversation state from the turn context.
-                //var state = await _accessors.CounterState.GetAsync(turnContext, () => new CounterState());
+                // Get the conversation state from the turn context.
+                var state = await _accessors.UserState.GetAsync(turnContext, () => new UserState());
 
-                //// Bump the turn count for this conversation.
-                //state.TurnCount++;
+                // Bump the turn count for this conversation.
+                state.TurnCount++;
+                state.Id = turnContext.Activity.From.Id;
+                state.BotId = turnContext.Activity.Recipient.Id;
+                state.BotName = turnContext.Activity.Recipient.Name;
+                state.Name = turnContext.Activity.From.Name;
+                state.ChannelId = turnContext.Activity.ChannelId;
+                state.ServiceUrl = turnContext.Activity.ServiceUrl;
+                if (state.Jobs != null)
+                {
+                    state.Jobs.Add(new Job());
+                }
+                else
+                {
+                    state.Jobs = new List<Job>();
+                }
+                if (state.Notifications != null)
+                {
+                    state.Notifications.Add(new Notification());
+                }
+                else
+                {
+                    state.Notifications = new List<Notification>();
+                }
 
-                //// Set the property using the accessor.
-                //await _accessors.CounterState.SetAsync(turnContext, state);
+                // Set the property using the accessor.
+                await _accessors.UserState.SetAsync(turnContext, state);
 
-                //// Save the new turn count into the conversation state.
-                //await _accessors.ConversationState.SaveChangesAsync(turnContext);
+                // Save the new turn count into the conversation state.
+                await _accessors.ConversationState.SaveChangesAsync(turnContext);
 
-                //// Echo back to the user whatever they typed.
-                //var responseMessage = $"Turn {state.TurnCount}: You sent '{turnContext.Activity.Text}'\n";
-                //await turnContext.SendActivityAsync(responseMessage);
+                // Echo back to the user whatever they typed.
+                var msg = $"Turn {state.TurnCount} " +
+                          $"Id: {state.Id} " +
+                          $"BotId: {state.BotId} " +
+                          $"BotName: {state.BotName} " +
+                          $"Name: {state.Name} " +
+                          $"ChannelId: {state.ChannelId} " +
+                          $"ServiceUrl: {state.ServiceUrl} " +
+                          $"Notifications: {state.Notifications.Count} " +
+                          $"Jobs: {state.Jobs.Count}";
+                await turnContext.SendActivityAsync(msg);
+
                 if (!string.IsNullOrWhiteSpace(turnContext.Activity.Text) &&
                     turnContext.Activity.Text.ToLowerInvariant().Replace("<at>syntinelbot2</at>", string.Empty).Trim() == "hi")
                 {
