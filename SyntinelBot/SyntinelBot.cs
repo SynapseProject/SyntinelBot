@@ -4,6 +4,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Bot.Builder;
@@ -36,14 +38,20 @@ namespace SyntinelBot
         private IConfiguration _config;
         private RegisteredUsers _registeredUsers;
         private IStorage _dataStore;
-
-        private const string WelcomeText = @"Welcome to Syntinel channel. Syntinel Bot is at your service.";
+        private string _userDatabase = @".\UserDatabase.json";
+        private const string WelcomeText = @"Welcome. Syntinel Bot is at your service.";
+        private string _msteamsMention = "<at>syntinelbot</at>";
+        private string _slackMention = "@syntinelbot";
+        private List<string> _notificationChannels = new List<string>() { "msteams", "slack" };
+        private string _appId = "b4e8dc4d-86fd-4675-bee0-00d4ecc35f4d";
+        private string _password = "pdwMACG16)^(hfdpXSE823-";
 
         // This array contains the file location of our adaptive cards
-        private readonly string[] _cards =
+        string _cardLocation = @".\Resources\";
+        private readonly Dictionary<string, string> _cards = new Dictionary<string, string>()
         {
-            @".\Resources\Ec2Resize.msteams.json",
-            @".\Resources\Ec2Resize.slack.json"
+            { "msteams/ec2", @".\Resources\Ec2Resize.msteams.json" },
+            { "slack", @".\Resources\Ec2Resize.slack.json" },
         };
 
         /// <summary>
@@ -72,7 +80,6 @@ namespace SyntinelBot
 
             _registeredUsers = _config.Get<RegisteredUsers>();
             _logger.LogInformation($"Registered User Count: {_registeredUsers?.Users.Count}");
-
             _dataStore = Startup.DataStore;
         }
 
@@ -101,129 +108,83 @@ namespace SyntinelBot
             // see https://aka.ms/about-bot-activity-message to learn more about the message and other activity types
             if (turnContext.Activity.Type == ActivityTypes.Message)
             {
-                // Get the conversation state from the turn context.
-                var state = await _accessors.UserState.GetAsync(turnContext, () => new UserState());
-
-                // Bump the turn count for this conversation.
-                state.TurnCount++;
-                state.Id = turnContext.Activity.From.Id;
-                state.BotId = turnContext.Activity.Recipient.Id;
-                state.BotName = turnContext.Activity.Recipient.Name;
-                state.Name = turnContext.Activity.From.Name;
-                state.ChannelId = turnContext.Activity.ChannelId;
-                state.ServiceUrl = turnContext.Activity.ServiceUrl;
-                if (state.Jobs != null)
+                var activityText = turnContext.Activity.Text;
+                try
                 {
-                    state.Jobs.Add(new Job());
-                }
-                else
-                {
-                    state.Jobs = new List<Job>();
-                }
-                if (state.Notifications != null)
-                {
-                    state.Notifications.Add(new Notification());
-                }
-                else
-                {
-                    state.Notifications = new List<Notification>();
-                }
+                    // Get the conversation state from the turn context.
+                    var state = await _accessors.UserState.GetAsync(turnContext, () => new UserState());
 
-                // Set the property using the accessor.
-                await _accessors.UserState.SetAsync(turnContext, state);
+                    // Bump the turn count for this conversation.
+                    state.TurnCount++;
+                    state.Id = turnContext.Activity.From.Id;
+                    state.BotId = turnContext.Activity.Recipient.Id;
+                    state.BotName = turnContext.Activity.Recipient.Name;
+                    state.Name = turnContext.Activity.From.Name;
+                    state.ChannelId = turnContext.Activity.ChannelId;
+                    state.ServiceUrl = turnContext.Activity.ServiceUrl;
 
-                // Save the new turn count into the conversation state.
-                await _accessors.ConversationState.SaveChangesAsync(turnContext);
+                    var key = $"{turnContext.Activity.ChannelId}/{turnContext.Activity.From.Id}".Replace(":", ";");
 
-                // Echo back to the user whatever they typed.
-                var msg = $"Turn {state.TurnCount} " +
-                          $"Id: {state.Id} " +
-                          $"BotId: {state.BotId} " +
-                          $"BotName: {state.BotName} " +
-                          $"Name: {state.Name} " +
-                          $"ChannelId: {state.ChannelId} " +
-                          $"ServiceUrl: {state.ServiceUrl} " +
-                          $"Notifications: {state.Notifications.Count} " +
-                          $"Jobs: {state.Jobs.Count}";
-                await turnContext.SendActivityAsync(msg);
+                    if (!_registeredUsers.Users.ContainsKey(key))
+                    {
+                        var newUser = new User()
+                        {
+                            Alias = $"{turnContext.Activity.From.Name}@{turnContext.Activity.ChannelId}",
+                            ChannelId = turnContext.Activity.ChannelId,
+                            Id = turnContext.Activity.From.Id,
+                            Name = turnContext.Activity.From.Name,
+                            ServiceUrl = turnContext.Activity.ServiceUrl,
+                            TenantId = string.Empty
+                        };
+                        _registeredUsers.Users.Add(key, newUser);
+                        var json = JsonConvert.SerializeObject(_registeredUsers, Formatting.Indented);
+                        File.WriteAllText(_userDatabase, json);
+                    }
+
+                    // Set the property using the accessor.
+                    await _accessors.UserState.SetAsync(turnContext, state);
+
+                    // Save the new turn count into the conversation state.
+                    await _accessors.ConversationState.SaveChangesAsync(turnContext);
+
+                    // Echo back to the user whatever they typed.
+
+                    var msg = $"Turn {state.TurnCount} " +
+                              $"Id: {state.Id} " +
+                              $"BotId: {state.BotId} " +
+                              $"BotName: {state.BotName} " +
+                              $"Name: {state.Name} " +
+                              $"ChannelId: {state.ChannelId} " +
+                              $"ServiceUrl: {state.ServiceUrl} " +
+                              $"Notifications: {state.Notifications?.Count} " +
+                              $"Jobs: {state.Jobs?.Count}";
+                    await turnContext.SendActivityAsync(msg);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex.Message);
+                }
 
                 if (_dataStore != null)
                 {
                     var abc = await _dataStore.ReadAsync(new[] { "BotAccessors.UserState" }, cancellationToken);
                 }
 
-                if (!string.IsNullOrWhiteSpace(turnContext.Activity.Text) &&
-                    turnContext.Activity.Text.ToLowerInvariant().Replace("<at>syntinelbot2</at>", string.Empty).Trim() == "hi")
+                if (!string.IsNullOrWhiteSpace(activityText) &&
+                    activityText.ToLowerInvariant()
+                        .Replace(_msteamsMention, string.Empty)
+                        .Replace(_slackMention, string.Empty)
+                        .Trim(' ', '\r', '\n') == "users")
                 {
-                    Random r = new Random();
-                    var cardAttachment = CreateAdaptiveCardAttachment(this._cards[r.Next(this._cards.Length)]);
-                    var reply = turnContext.Activity.CreateReply();
-                    reply.Attachments = new List<Attachment>() { cardAttachment };
-                    await turnContext.SendActivityAsync("Hi, how are you");
+                    await ListRegisteredUsers(turnContext, cancellationToken);
                 }
-                else if (!string.IsNullOrWhiteSpace(turnContext.Activity.Text) &&
-                    turnContext.Activity.Text.ToLowerInvariant().Replace("<at>syntinelbot2</at>", string.Empty).Trim() == "notify")
+                else if (!string.IsNullOrWhiteSpace(activityText) &&
+                         activityText.ToLowerInvariant()
+                        .Replace(_msteamsMention, string.Empty)
+                        .Replace(_slackMention, string.Empty)
+                        .Trim(' ', '\r', '\n').StartsWith("notify"))
                 {
-                    Random r = new Random();
-                    var cardAttachment = CreateAdaptiveCardAttachment(this._cards[r.Next(this._cards.Length)]);
-                    var reply = turnContext.Activity.CreateReply();
-                    reply.Attachments = new List<Attachment>() { cardAttachment };
-                    await turnContext.SendActivityAsync(reply, cancellationToken);
-                }
-                if (!string.IsNullOrWhiteSpace(turnContext.Activity.Text) && turnContext.Activity.Text.ToLowerInvariant().Trim() == "inform")
-                {
-                    // Use the data stored previously to create the required objects.
-                    var toId = "29:1qabkb36ivJfq1RaTWsZKO3U4yVdk_JoipoLKU29qXXc22ZZ7qR0_Ifg4yNVKGKF-v2InhTuNLG3DU1UND1mlRw";
-                    var toName = "ZHE YANG";
-                    var fromId = "28:b4e8dc4d-86fd-4675-bee0-00d4ecc35f4d";
-                    var fromName = "syntinelbot2";
-                    var serviceUrl = "https://smba.trafficmanager.net/apac/";
-                    var userAccount = new ChannelAccount(toId, toName);
-                    var botAccount = new ChannelAccount(fromId, fromName);
-                    var tenantId = "a12bfa5b-4fe9-4755-83f0-a4a6ee8f2277";
-                    var appId = "b4e8dc4d-86fd-4675-bee0-00d4ecc35f4d";
-                    var password = "pdwMACG16)^(hfdpXSE823-";
-
-
-                    try
-                    {
-                        // Init connector
-                        // MicrosoftAppCredentials cred = new MicrosoftAppCredentials(appId: "b4e8dc4d-86fd-4675-bee0-00d4ecc35f4d", password: "pdwMACG16)^(hfdpXSE823-");
-                        MicrosoftAppCredentials.TrustServiceUrl(serviceUrl, DateTime.Now.AddDays(7));
-                        var account = new MicrosoftAppCredentials("b4e8dc4d-86fd-4675-bee0-00d4ecc35f4d", "pdwMACG16)^(hfdpXSE823-");
-                        var client = new ConnectorClient(new Uri(serviceUrl), account);
-                        var response = await client.Conversations.CreateOrGetDirectConversation(botAccount, userAccount, tenantId);
-
-                        // Create a new message.
-                        var message = Activity.CreateMessageActivity();
-                        var conversationId = response.Id;
-                        // Set the address-related properties in the message and send the message.
-                        Random r = new Random();
-                        var cardAttachment = CreateAdaptiveCardAttachment(this._cards[r.Next(this._cards.Length)]);
-                        message.From = botAccount;
-                        message.Recipient = userAccount;
-                        message.Conversation = new ConversationAccount(id: conversationId);
-                        message.Attachments = new List<Attachment>() { cardAttachment };
-                        message.Locale = "en-us";
-                        await client.Conversations.SendToConversationAsync((Activity)message);
-                    }
-                    catch (Exception e)
-                    {
-                        _logger.LogError(e.Message);
-                    }
-
-
-                    // https://docs.microsoft.com/en-us/microsoftteams/platform/concepts/bots/bot-conversations/bots-conv-proactive
-                    // https://stackoverflow.com/questions/48102932/microsoft-teams-bot-could-not-parse-tenant-id
-//                    var parameters = new ConversationParameters
-//                    {
-//                        Bot = botAccount,
-//                        Members = new ChannelAccount[] { userAccount },
-//                        ChannelData = new TeamsChannelData
-//                        {
-//                            Tenant = channelData.Tenant
-//                        }
-//                    };
+                    await NotifyUser(turnContext, activityText, cancellationToken);
                 }
                 else if (turnContext.Activity.Value != null && turnContext.Activity.Value.GetType() == typeof(JObject))
                 {
@@ -251,25 +212,216 @@ namespace SyntinelBot
             {
                 if (turnContext.Activity.MembersAdded != null)
                 {
-                    await SendWelcomeMessageAsync(turnContext, cancellationToken);
+                    // await SendWelcomeMessageAsync(turnContext, cancellationToken);
                 }
             }
             else if (turnContext.Activity.Type == ActivityTypes.ContactRelationUpdate)
             {
-                await turnContext.SendActivityAsync($"{turnContext.Activity.Type} activity detected", cancellationToken: cancellationToken);
+                // await turnContext.SendActivityAsync($"{turnContext.Activity.Type} activity detected", cancellationToken: cancellationToken);
             }
             else if (turnContext.Activity.Type == ActivityTypes.Typing)
             {
-                await turnContext.SendActivityAsync($"{turnContext.Activity.Type} activity detected", cancellationToken: cancellationToken);
+                // await turnContext.SendActivityAsync($"{turnContext.Activity.Type} activity detected", cancellationToken: cancellationToken);
             }
             else if (turnContext.Activity.Type == ActivityTypes.DeleteUserData)
             {
-                await turnContext.SendActivityAsync($"{turnContext.Activity.Type} activity detected", cancellationToken: cancellationToken);
+                // await turnContext.SendActivityAsync($"{turnContext.Activity.Type} activity detected", cancellationToken: cancellationToken);
             }
             else
             {
-                await turnContext.SendActivityAsync($"{turnContext.Activity.Type} activity detected", cancellationToken: cancellationToken);
+                // await turnContext.SendActivityAsync($"{turnContext.Activity.Type} activity detected", cancellationToken: cancellationToken);
             }
+        }
+
+        private async Task NotifyUser(ITurnContext turnContext, string activityText, CancellationToken cancellationToken)
+        {
+            var answer = string.Empty;
+            var args = Regex.Matches(activityText, @"[\""].+?[\""]|[^ ]+")
+                .Select(m => m.Value)
+                .ToList();
+            if (args.Count != 4)
+            {
+                answer = "Syntax: notify <user alias> <action> <machine name>. Support actions: ec2resize, ec2patch, ec2snooze.";
+            }
+            else
+            {
+                var userAlias = args[1].ToLowerInvariant();
+                var pos = userAlias.LastIndexOf('@');
+                var channelId = pos != -1 ? userAlias.Substring(pos + 1) : string.Empty;
+                var action = args[2].ToLowerInvariant();
+                var machineName = args[3].ToUpperInvariant();
+
+                if (!IsRegisteredUser(userAlias))
+                {
+                    answer = $"{userAlias} is not a registered user.";
+                }
+                else if (action != "ec2resize" && action != "ec2patch" && action != "ec2snooze")
+                {
+                    answer = $"Support actions: ec2resize, ec2patch, ec2snooze.";
+                }
+                else if (!_notificationChannels.Contains(channelId))
+                {
+                    answer = $"Supported channels: msteams, slack";
+                }
+                else
+                {
+                    string notificationId = await SendNotification(userAlias, channelId, action, machineName);
+                    if (!string.IsNullOrWhiteSpace(notificationId))
+                    {
+                        answer = $"Notification {notificationId} has been sent to {userAlias}.";
+                    }
+                    else
+                    {
+                        answer = $"Unable to send notification to {userAlias}";
+                    }
+                }
+            }
+
+            await turnContext.SendActivityAsync(answer, cancellationToken: cancellationToken);
+        }
+
+        private async Task<string> SendNotification(string userAlias, string channelId, string action, string machineName)
+        {
+            string notificationId = string.Empty;
+            string filePath = string.Empty;
+            if (!string.IsNullOrWhiteSpace(userAlias) && !string.IsNullOrWhiteSpace(action) && !string.IsNullOrWhiteSpace(machineName) && _notificationChannels.Contains(channelId))
+            {
+                try
+                {
+                    var recipient = _registeredUsers.Users.Values.First(a => a.Alias == userAlias);
+                    switch (channelId)
+                    {
+                        case "msteams":
+                            notificationId = await SendTeamsInteractiveMessage(channelId, action, machineName, recipient);
+                            break;
+                        case "slack":
+                            notificationId = await SendSlackInteractiveMessage(channelId, action, machineName, recipient);
+                            break;
+                        default:
+                            break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex.Message);
+                }
+                return notificationId;
+            }
+
+            return notificationId;
+        }
+
+        private async Task<string> SendTeamsInteractiveMessage(string channelId, string action, string machineName, User recipient)
+        {
+            string filePath;
+            string notificationId;
+            filePath = $"{_cardLocation}{action}.{channelId}.json";
+            var adaptiveCardJson = File.ReadAllText(filePath);
+            adaptiveCardJson = adaptiveCardJson.Replace("{ResourceName}", machineName.ToUpperInvariant());
+            var attachment = new Attachment()
+            {
+                ContentType = "application/vnd.microsoft.card.adaptive",
+                Content = JsonConvert.DeserializeObject(adaptiveCardJson),
+            };
+
+            var toId = recipient.Id;
+            var toName = recipient.Name;
+            var fromId = "28:b4e8dc4d-86fd-4675-bee0-00d4ecc35f4d";
+            var fromName = "SyntinelBot";
+            var serviceUrl = recipient.ServiceUrl;
+            var tenantId = recipient.TenantId;
+            var userAccount = new ChannelAccount(toId, toName);
+            var botAccount = new ChannelAccount(fromId, fromName);
+
+            var account = new MicrosoftAppCredentials(_appId, _password);
+            MicrosoftAppCredentials.TrustServiceUrl(serviceUrl);
+            var client = new ConnectorClient(new Uri(serviceUrl), account);
+            var response = await client.Conversations.CreateOrGetDirectConversation(botAccount, userAccount, tenantId);
+            // Create a new message.
+            var message = Activity.CreateMessageActivity();
+            var conversationId = response.Id;
+
+            message.From = botAccount;
+            message.Recipient = userAccount;
+            message.Conversation = new ConversationAccount(id: conversationId);
+            message.Attachments = new List<Attachment>() {attachment};
+            message.Locale = "en-us";
+            await client.Conversations.SendToConversationAsync((Activity) message);
+            notificationId = DateTime.Now.Ticks.ToString();
+            return notificationId;
+        }
+
+        private async Task<string> SendSlackInteractiveMessage(string channelId, string action, string machineName, User recipient)
+        {
+            string filePath;
+            string notificationId;
+            filePath = $"{_cardLocation}{action}.{channelId}.json";
+            var cardJson = File.ReadAllText(filePath);
+            cardJson = cardJson.Replace("{ResourceName}", machineName.ToUpperInvariant());
+
+            var toId = recipient.Id;
+            var toName = recipient.Name;
+            var fromId = "BEF9N1X1P:TEH9KHQG6";
+            var fromName = "syntinelbot";
+            var serviceUrl = recipient.ServiceUrl;
+            var tenantId = recipient.TenantId;
+            var userAccount = new ChannelAccount(toId, toName);
+            var botAccount = new ChannelAccount(fromId, fromName);
+            MicrosoftAppCredentials.TrustServiceUrl(serviceUrl);
+            var account = new MicrosoftAppCredentials(_appId, _password);
+            var client = new ConnectorClient(new Uri(serviceUrl), account);
+            var conversation = client.Conversations.CreateDirectConversation(botAccount, userAccount); // Note that Async version seems to have bug
+
+            // Create a new message.
+            var message = Activity.CreateMessageActivity();
+            var conversationId = conversation.Id;
+
+            message.From = botAccount;
+            message.Recipient = userAccount;
+            message.Conversation = new ConversationAccount(id: conversationId);
+            message.ChannelData = JsonConvert.DeserializeObject(cardJson);
+            message.Locale = "en-us";
+            await client.Conversations.SendToConversationAsync((Activity)message);
+            notificationId = DateTime.Now.Ticks.ToString();
+            return notificationId;
+        }
+
+        private bool IsRegisteredUser(string userAlias)
+        {
+            var foundUser = false;
+
+            if (_registeredUsers != null && !string.IsNullOrWhiteSpace(userAlias))
+            {
+                foreach (var user in _registeredUsers.Users)
+                {
+                    if (userAlias.ToLowerInvariant() == user.Value.Alias)
+                    {
+                        foundUser = true;
+                        break;
+                    }
+                }
+            }
+
+            return foundUser;
+        }
+
+        private async Task ListRegisteredUsers(ITurnContext turnContext, CancellationToken cancellationToken)
+        {
+            var answer = string.Empty;
+            if (_registeredUsers != null && _registeredUsers.Users?.Count > 0)
+            {
+                answer = "Registered Users:";
+                foreach (var user in _registeredUsers.Users.Values)
+                {
+                    answer = $"{answer}  {user.Alias}";
+                }
+            }
+            else
+            {
+                answer = "There is no registered user";
+            }
+
+            await turnContext.SendActivityAsync(answer, cancellationToken: cancellationToken);
         }
 
         /// <summary>

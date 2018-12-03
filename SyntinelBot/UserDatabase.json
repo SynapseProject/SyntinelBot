@@ -1,0 +1,84 @@
+{
+  "Users": {
+    "emulator/1": {
+      "Alias": null,
+      "Id": "1",
+      "ChannelId": "emulator",
+      "Name": "Bot",
+      "ServiceUrl": "",
+      "TenantId": ""
+    },
+    "emulator/19ea3758-ed8f-43b7-b992-65029af38774": {
+      "Alias": "syntinel@bpinternal",
+      "Id": "19ea3758-ed8f-43b7-b992-65029af38774",
+      "ChannelId": "emulator",
+      "Name": "User",
+      "ServiceUrl": "http://localhost:50259",
+      "TenantId": ""
+    },
+    "msteams/28;b4e8dc4d-86fd-4675-bee0-00d4ecc35f4d": {
+      "Alias": "syntinelbot@msteams",
+      "Id": "28:b4e8dc4d-86fd-4675-bee0-00d4ecc35f4d",
+      "ChannelId": "msteams",
+      "Name": "SyntinelBot",
+      "ServiceUrl": "https://smba.trafficmanager.net/apac/",
+      "TenantId": "a12bfa5b-4fe9-4755-83f0-a4a6ee8f2277"
+    },
+    "msteams/29;1pRKpcg_a1rfT4PtimE70m_TT1L8RUzGXfIx71AfYJq_RECNLYa4YoHltWdcvBoefnK55Myybq9gYpGHF3ABoNA": {
+      "Alias": "shirley@msteams",
+      "Id": "29:1pRKpcg_a1rfT4PtimE70m_TT1L8RUzGXfIx71AfYJq_RECNLYa4YoHltWdcvBoefnK55Myybq9gYpGHF3ABoNA",
+      "ChannelId": "msteams",
+      "Name": "Shirley Davis",
+      "ServiceUrl": "https://smba.trafficmanager.net/apac/",
+      "TenantId": ""
+    },
+    "msteams/29;1qabkb36ivJfq1RaTWsZKO3U4yVdk_JoipoLKU29qXXc22ZZ7qR0_Ifg4yNVKGKF-v2InhTuNLG3DU1UND1mlRw": {
+      "Alias": "yang@msteams",
+      "Id": "29:1qabkb36ivJfq1RaTWsZKO3U4yVdk_JoipoLKU29qXXc22ZZ7qR0_Ifg4yNVKGKF-v2InhTuNLG3DU1UND1mlRw",
+      "ChannelId": "msteams",
+      "Name": "Yang, Zhe",
+      "ServiceUrl": "https://smba.trafficmanager.net/apac/",
+      "TenantId": "a12bfa5b-4fe9-4755-83f0-a4a6ee8f2277"
+    },
+    "slack/BEF9N1X1P;TEH9KHQG6": {
+      "Alias": "syntinelbot@slack",
+      "Id": "BEF9N1X1P:TEH9KHQG6",
+      "ChannelId": "slack",
+      "Name": "syntinelbot",
+      "ServiceUrl": "https://slack.botframework.com/",
+      "TenantId": ""
+    },
+    "slack/UEG3MGZUM;TEH9KHQG6": {
+      "Alias": "yang@slack",
+      "Id": "UEG3MGZUM:TEH9KHQG6",
+      "ChannelId": "slack",
+      "Name": "syntinelmobile",
+      "ServiceUrl": "https://slack.botframework.com/",
+      "TenantId": ""
+    },
+    "slack/UEHBNDXMH;TEH9KHQG6": {
+      "Alias": "dixon@slack",
+      "Id": "UEHBNDXMH:TEH9KHQG6",
+      "ChannelId": "slack",
+      "Name": "mersentos",
+      "ServiceUrl": "https://slack.botframework.com/",
+      "TenantId": ""
+    },
+    "slack/UEHEMUC58;TEH9KHQG6": {
+      "Alias": "pearlene@slack",
+      "Id": "UEHEMUC58:TEH9KHQG6",
+      "ChannelId": "slack",
+      "Name": "yeongtze",
+      "ServiceUrl": "https://slack.botframework.com/",
+      "TenantId": ""
+    },
+    "msteams/29;1e8AWAwalGtoES5tlhAMIvQ9laN27LtGRn1YNCj3M6ZLL4MJ_FnbBZqL5ZUsKdaxnr8zXTIMcLxCjv14v5ZJScw": {
+      "Alias": "John Doe@msteams",
+      "Id": "29:1e8AWAwalGtoES5tlhAMIvQ9laN27LtGRn1YNCj3M6ZLL4MJ_FnbBZqL5ZUsKdaxnr8zXTIMcLxCjv14v5ZJScw",
+      "ChannelId": "msteams",
+      "Name": "John Doe",
+      "ServiceUrl": "https://smba.trafficmanager.net/apac/",
+      "TenantId": ""
+    }
+  }
+}

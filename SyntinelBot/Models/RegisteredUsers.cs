@@ -7,6 +7,6 @@ namespace SyntinelBot
 {
     public class RegisteredUsers
     {
-        public List<User> Users { get; set; }
+        public Dictionary<string, User> Users { get; set; }
     }
 }
