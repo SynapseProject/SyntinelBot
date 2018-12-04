@@ -1,33 +1,38 @@
 {
-    "text": "*[ResourceName] (t2.large) is 43% utilized for the past 7 days. Would you like to resize it?*",
-    "attachments": [{
-        "text": "",
-        "fallback": "You are unable to choose an instance type",
-        "callback_id": "[NotificationId]",
-        "color": "#3AA3E3",
-        "attachment_type": "default",
-        "actions": [{
-                "name": "instance_list",
-                "text": "Choose an instance type",
-                "type": "select",
-                "options": [{
-                        "text": "t2.nano",
-                        "value": "t2.micro"
-                    },
-                    {
-                        "text": "t2.micro",
-                        "value": "t2.micro"
-                    },
-                    {
-                        "text": "t2.medium",
-                        "value": "t2.medium"
-                    },
-                    {
-                        "text": "Ignore",
-                        "value": "ignore"
-                    }
-                ]
+  "text": "*[ResourceName] (t2.large) is 43% utilized for the past 7 days. Would you like to resize it?*",
+  "attachments": [
+    {
+      "text": "",
+      "fallback": "Your client does not support instance selection. Please contact the administrator.",
+      "callback_id": "[ResourceName]/[NotificationId]",
+      "color": "#3AA3E3",
+      "attachment_type": "default",
+      "actions": [
+        {
+          "name": "resize",
+          "value": "[ResourceName]",
+          "text": "Choose an instance type",
+          "type": "select",
+          "options": [
+            {
+              "text": "t2.nano",
+              "value": "t2.micro"
+            },
+            {
+              "text": "t2.micro",
+              "value": "t2.micro"
+            },
+            {
+              "text": "t2.medium",
+              "value": "t2.medium"
+            },
+            {
+              "text": "Ignore",
+              "value": "ignore"
             }
-        ]
-    }]
+          ]
+        }
+      ]
+    }
+  ]
 }

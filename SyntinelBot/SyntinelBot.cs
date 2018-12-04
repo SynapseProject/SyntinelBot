@@ -17,6 +17,7 @@ using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using SyntinelBot.Models;
+using SyntinelBot.Models.Slack;
 
 namespace SyntinelBot
 {
@@ -46,6 +47,7 @@ namespace SyntinelBot
         private string _appId = string.Empty;
         private string _password = string.Empty;
         private string _cardLocation = string.Empty;
+        private ITurnContext _emulatorContext = null;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="SyntinelBot"/> class.
@@ -196,6 +198,7 @@ namespace SyntinelBot
                                 if (AcknowledgeNotification(channelId, userId, notificationId).Result)
                                 {
                                     answer = $"Job {jobId} started to {action} {instanceName} from t2.large to {instanceType}.";
+                                    NotifySyntinel(answer);
                                 }
                                 else
                                 {
@@ -220,41 +223,54 @@ namespace SyntinelBot
                 }
                 else if (turnContext.Activity.ChannelId == "slack" && turnContext.Activity.ChannelData != null)
                 {
-                    var channelData = (JObject)turnContext.Activity.ChannelData;
-                    var channelId = turnContext.Activity.ChannelId;
-                    var userId = turnContext.Activity.From.Id;
-                    var responseValue = (JObject)turnContext.Activity.Value;
                     try
                     {
-                        var action = responseValue["action"].ToString();
-                        string answer = string.Empty;
-                        var instanceType = responseValue["instanceType"].ToString();
-                        var instanceName = responseValue["instanceName"].ToString();
-                        Guid.TryParse(responseValue["notificationId"].ToString(), out var notificationId);
-
-                        switch (action)
+                        var channelId = turnContext.Activity.ChannelId;
+                        var userId = turnContext.Activity.From.Id;
+                        var channelData = (JObject)turnContext.Activity.ChannelData;
+                        var slackMessage = channelData.ToObject<SlackMessage>();
+                        if (slackMessage != null && slackMessage.Payload.Type == "interactive_message")
                         {
-                            case "resize":
-                                var jobId = Guid.NewGuid();
-                                if (AcknowledgeNotification(channelId, userId, notificationId).Result)
+                            var firstAction = slackMessage.Payload.Actions?.FirstOrDefault();
+                            if (firstAction != null)
+                            {
+                                string answer = string.Empty;
+                                var action = firstAction.Name;
+                                var instanceType = firstAction.SelectedOptions.FirstOrDefault()?.Value;
+                                var instanceName = slackMessage.Payload.CallbackId.Split('/')[0];
+                                Guid.TryParse(slackMessage.Payload.CallbackId.Split('/')[1], out var notificationId);
+
+                                switch (action)
                                 {
-                                    answer = $"Job {jobId} started to {action} {instanceName} from t2.large to {instanceType}.";
-                                }
-                                else
-                                {
-                                    answer = "Sorry, I am not able to find matching record for your request.";
+                                    case "resize":
+                                        if (instanceType != "ignore")
+                                        {
+                                            var jobId = Guid.NewGuid();
+                                            if (AcknowledgeNotification(channelId, userId, notificationId).Result)
+                                            {
+                                                answer = $"Job {jobId} started to {action} {instanceName} from t2.large to {instanceType}.";
+                                                NotifySyntinel(answer);
+                                            }
+                                            else
+                                            {
+                                                answer = "Sorry, I am not able to find matching record for your request.";
+                                            }
+                                        }
+                                        else
+                                        {
+                                            answer = $"Notification to {action} {instanceName} is ignored.";
+                                        }
+
+                                        break;
+                                    default:
+                                        answer = "I am unable to process your request. Please contact the administrator.";
+                                        break;
                                 }
 
-                                break;
-                            case "ignore":
-                                answer = $"Notification to {action} {instanceName} is ignored.";
-                                break;
-                            default:
-                                answer = "I am unable to process your request. Please contact the administrator.";
-                                break;
+                                await turnContext.SendActivityAsync(answer);
+                            }
+
                         }
-
-                        await turnContext.SendActivityAsync(answer);
                     }
                     catch (Exception e)
                     {
@@ -378,6 +394,21 @@ namespace SyntinelBot
                 var json = JsonConvert.SerializeObject(_registeredUsers, Formatting.Indented);
                 File.WriteAllText(_userRegistry, json);
             }
+            else if (turnContext.Activity.ChannelId == "emulator")
+            {
+                var newUser = new User
+                {
+                    Alias = $"{turnContext.Activity.From.Name}@{turnContext.Activity.ChannelId}",
+                    BotId = turnContext.Activity.Recipient.Id,
+                    BotName = turnContext.Activity.Recipient.Name,
+                    ChannelId = turnContext.Activity.ChannelId,
+                    Id = turnContext.Activity.From.Id,
+                    Name = turnContext.Activity.From.Name,
+                    ServiceUrl = turnContext.Activity.ServiceUrl,
+                    TenantId = string.Empty,
+                };
+                _registeredUsers.Users[storageKey] = newUser;
+            }
         }
 
         private async Task NotifyUserAsync(ITurnContext turnContext, string activityText, CancellationToken cancellationToken)
@@ -392,6 +423,7 @@ namespace SyntinelBot
             }
             else
             {
+                _emulatorContext = turnContext.Activity.ChannelId == "emulator" ? turnContext : null;
                 var userAlias = args[1].ToLowerInvariant();
                 var pos = userAlias.LastIndexOf('@');
                 var channelId = pos != -1 ? userAlias.Substring(pos + 1) : string.Empty;
@@ -557,47 +589,128 @@ namespace SyntinelBot
 
         private async Task<Guid> SendSlackInteractiveMessage(ITurnContext turnContext, string channelId, string action, string machineName, User recipient, Guid notificationId)
         {
-            string filePath;
+            var filePath = string.Empty;
             notificationId = notificationId != Guid.Empty ? notificationId : Guid.NewGuid();
             filePath = $"{_cardLocation}{action}.{channelId}.json";
-            var cardJson = File.ReadAllText(filePath);
-            cardJson = cardJson.Replace("[ResourceName]", machineName.ToUpperInvariant());
-            cardJson = cardJson.Replace("[NotificationId]", notificationId.ToString());
-
-            var toId = recipient.Id;
-            var toName = recipient.Name;
-            var fromId = recipient.BotId;
-            var fromName = recipient.BotName;
-            var serviceUrl = recipient.ServiceUrl;
-            var userAccount = new ChannelAccount(toId, toName);
-            var botAccount = new ChannelAccount(fromId, fromName);
-
-            var message = Activity.CreateMessageActivity();
+            var storageKey = $"{channelId}/{recipient.Id.Replace(":", ";")}.UserState";
             var conversationId = string.Empty;
-            message.From = botAccount;
-            message.Recipient = userAccount;
-            message.Conversation = new ConversationAccount(id: conversationId);
-            message.ChannelData = JsonConvert.DeserializeObject(cardJson);
-            message.Locale = "en-us";
 
-            if (turnContext != null)
+            try
             {
-                message.Conversation = turnContext.Activity.Conversation;
-                await turnContext.SendActivityAsync(message);
+                // Save the notification to the bot store
+                if (_botStore != null)
+                {
+                    Notification notification = new Notification()
+                    {
+                        Id = notificationId,
+                        Acknowledged = false,
+                        ForUser = recipient,
+                        Action = action,
+                        Target = machineName,
+                        From = string.Empty,
+                        To = string.Empty,
+                        NotificationTime = DateTime.Now,
+                    };
+
+                    var changes = new Dictionary<string, object>();
+                    var userState = _botStore.ReadAsync<UserState>(new[] { storageKey }).Result?.FirstOrDefault().Value;
+
+                    if (userState == null)
+                    {
+                        userState = new UserState()
+                        {
+                            Id = recipient.Id,
+                            BotId = recipient.BotId,
+                            BotName = recipient.BotName,
+                            Name = recipient.Name,
+                            ServiceUrl = recipient.ServiceUrl,
+                            ChannelId = recipient.ChannelId,
+                            Jobs = new List<Job>(),
+                            Notifications = new List<Notification>() { notification },
+                        };
+                    }
+                    else if (userState.Notifications.FirstOrDefault(n => n.Id == notificationId) == null)
+                    {
+                        userState.Notifications.Add(notification);
+                    }
+
+                    changes.Add(storageKey, userState);
+                    await _botStore.WriteAsync(changes);
+                }
+
+                // Transforming the card
+                var cardJson = File.ReadAllText(filePath);
+                cardJson = cardJson.Replace("[ResourceName]", machineName.ToUpperInvariant());
+                cardJson = cardJson.Replace("[NotificationId]", notificationId.ToString());
+
+                var toId = recipient.Id;
+                var toName = recipient.Name;
+                var fromId = recipient.BotId;
+                var fromName = recipient.BotName;
+                var serviceUrl = recipient.ServiceUrl;
+                var tenantId = recipient.TenantId;
+                var userAccount = new ChannelAccount(toId, toName);
+                var botAccount = new ChannelAccount(fromId, fromName);
+
+                var message = Activity.CreateMessageActivity();
+                message.From = botAccount;
+                message.Recipient = userAccount;
+                message.ChannelData = JsonConvert.DeserializeObject(cardJson);
+                message.Locale = "en-us";
+
+                if (turnContext != null)
+                {
+                    message.Conversation = turnContext.Activity.Conversation;
+                    await turnContext.SendActivityAsync(message);
+                }
+                else
+                {
+                    MicrosoftAppCredentials.TrustServiceUrl(serviceUrl);
+                    var account = new MicrosoftAppCredentials(_appId, _password);
+                    var client = new ConnectorClient(new Uri(serviceUrl), account);
+
+                    // Note that Async version seems to have BUG
+                    var conversation = client.Conversations.CreateDirectConversation(botAccount, userAccount);
+                    conversationId = conversation.Id;
+                    message.Conversation = new ConversationAccount(id: conversationId);
+                    await client.Conversations.SendToConversationAsync((Activity)message);
+                }
             }
-            else
+            catch (Exception ex)
             {
-                MicrosoftAppCredentials.TrustServiceUrl(serviceUrl);
-                var account = new MicrosoftAppCredentials(_appId, _password);
-                var client = new ConnectorClient(new Uri(serviceUrl), account);
-
-                // Note that Async version seems to have BUG
-                var conversation = client.Conversations.CreateDirectConversation(botAccount, userAccount);
-                message.Conversation = new ConversationAccount(id: conversation.Id);
-                await client.Conversations.SendToConversationAsync((Activity)message);
+                _logger.LogError(ex.Message);
             }
 
             return notificationId;
+        }
+
+        private async Task NotifySyntinel(string txtMessage)
+        {
+            if (_registeredUsers != null)
+            {
+                var emulator = _registeredUsers.Users["emulator/19ea3758-ed8f-43b7-b992-65029af38774"];
+                if (emulator != null)
+                {
+                    var botAccount = new ChannelAccount(emulator.BotId, emulator.BotName);
+                    var userAccount = new ChannelAccount(emulator.Id, emulator.Name);
+                    MicrosoftAppCredentials.TrustServiceUrl(emulator.ServiceUrl);
+                    var account = new MicrosoftAppCredentials(_appId, _password);
+                    var client = new ConnectorClient(new Uri(emulator.ServiceUrl), account);
+
+                    var message = Activity.CreateMessageActivity();
+                    message.From = botAccount;
+                    message.Recipient = userAccount;
+                    message.Text = txtMessage;
+                    message.Locale = "en-us";
+
+                    // Note that Async version seems to have BUG
+                    var conversation = client.Conversations.CreateDirectConversation(botAccount, userAccount);
+                    string conversationId = conversation.Id;
+                    message.Conversation = new ConversationAccount(id: conversationId);
+                    await client.Conversations.SendToConversationAsync((Activity)message);
+                    // await _emulatorContext?.SendActivityAsync(txtMessage);
+                }
+            }
         }
 
         private bool IsRegisteredUser(string userAlias)
