@@ -7,11 +7,11 @@ namespace SyntinelBot.Models
 {
     public class Notification
     {
-        public string Id { get; set; }
+        public Guid Id { get; set; }
 
         public bool Acknowledged { get; set; }
 
-        public string ForUser { get; set; }
+        public User ForUser { get; set; }
 
         public string Action { get; set; }
 

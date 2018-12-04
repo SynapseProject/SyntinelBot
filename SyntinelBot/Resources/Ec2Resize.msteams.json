@@ -7,14 +7,14 @@
       "size": "Medium",
       "weight": "Bolder",
       "color": "Good",
-      "text": "Resize {ResourceName}"
+      "text": "Resize [ResourceName]"
     },
     {
       "type": "Container",
       "items": [
         {
           "type": "TextBlock",
-          "text": "{ResourceName} (t2.large) is 43% utilized for the past 7 days. Would you like to resize it?",
+          "text": "[ResourceName] (t2.large) is 43% utilized for the past 7 days. Would you like to resize it?",
           "wrap": true
         }
       ]
@@ -50,8 +50,8 @@
         "msteams": {
           "type": "messageBack",
           "displayText": "Resize",
-          "text": "text to bots",
-          "value": "{\"action\": \"resize\"}"
+          "text": "resize",
+          "value": "{\"instanceName\": \"[ResourceName]\", \"action\": \"resize\", \"notificationId\": \"[NotificationId]\"}"
         }
       }
     },
@@ -62,8 +62,8 @@
         "msteams": {
           "type": "messageBack",
           "displayText": "Ignore",
-          "text": "text to bots",
-          "value": "{\"action\": \"ignore\"}"
+          "text": "ignore",
+          "value": "{\"instanceName\": \"[ResourceName]\", \"action\": \"ignore\", \"notificationId\": \"[NotificationId]\"}"
         }
       }
     }

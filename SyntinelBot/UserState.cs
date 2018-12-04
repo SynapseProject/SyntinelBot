@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System.Collections.Generic;
+using Microsoft.Bot.Builder;
 using SyntinelBot.Models;
 
 namespace SyntinelBot
@@ -11,7 +12,7 @@ namespace SyntinelBot
     /// Stored in <see cref="Microsoft.Bot.Builder.ConversationState"/> and
     /// backed by <see cref="Microsoft.Bot.Builder.MemoryStorage"/>.
     /// </summary>
-    public class UserState
+    public class UserState : IStoreItem
     {
         /// <summary>
         /// Gets or sets the number of turns in the conversation.
@@ -34,5 +35,7 @@ namespace SyntinelBot
         public List<Job> Jobs { get; set; }
 
         public List<Notification> Notifications { get; set; }
+
+        public string ETag { get; set; }
     }
 }

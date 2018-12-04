@@ -1,9 +1,9 @@
 {
-    "text": "*{ResourceName} (t2.large) is 43% utilized for the past 7 days. Would you like to resize it?*",
+    "text": "*[ResourceName] (t2.large) is 43% utilized for the past 7 days. Would you like to resize it?*",
     "attachments": [{
         "text": "",
         "fallback": "You are unable to choose an instance type",
-        "callback_id": "wopr_game",
+        "callback_id": "[NotificationId]",
         "color": "#3AA3E3",
         "attachment_type": "default",
         "actions": [{
@@ -23,23 +23,10 @@
                         "value": "t2.medium"
                     },
                     {
-                        "text": "t2.large",
-                        "value": "t2.large"
+                        "text": "Ignore",
+                        "value": "ignore"
                     }
                 ]
-            },
-            {
-                "name": "action",
-                "text": "Resize",
-                "style": "danger",
-                "type": "button",
-                "value": "resize"
-            },
-            {
-                "name": "action",
-                "text": "Ignore",
-                "type": "button",
-                "value": "ignore"
             }
         ]
     }]

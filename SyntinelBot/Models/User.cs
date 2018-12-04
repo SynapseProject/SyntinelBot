@@ -11,6 +11,10 @@ namespace SyntinelBot
 
         public string Id { get; set; }
 
+        public string BotId { get; set; }
+
+        public string BotName { get; set; }
+
         public string ChannelId { get; set; }
 
         public string Name { get; set; }
