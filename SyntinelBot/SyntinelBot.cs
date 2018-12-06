@@ -198,7 +198,7 @@ namespace SyntinelBot
                                 if (AcknowledgeNotification(channelId, userId, notificationId).Result)
                                 {
                                     answer = $"Job {jobId} started to {action} {instanceName} from t2.large to {instanceType}.";
-                                    NotifySyntinel(answer);
+                                    NotifySyntinel(turnContext, channelId, userId, notificationId, answer);
                                 }
                                 else
                                 {
@@ -229,7 +229,7 @@ namespace SyntinelBot
                         var userId = turnContext.Activity.From.Id;
                         var channelData = (JObject)turnContext.Activity.ChannelData;
                         var slackMessage = channelData.ToObject<SlackMessage>();
-                        if (slackMessage != null && slackMessage.Payload.Type == "interactive_message")
+                        if (slackMessage != null && slackMessage.Payload?.Type == "interactive_message")
                         {
                             var firstAction = slackMessage.Payload.Actions?.FirstOrDefault();
                             if (firstAction != null)
@@ -249,7 +249,7 @@ namespace SyntinelBot
                                             if (AcknowledgeNotification(channelId, userId, notificationId).Result)
                                             {
                                                 answer = $"Job {jobId} started to {action} {instanceName} from t2.large to {instanceType}.";
-                                                NotifySyntinel(answer);
+                                                // NotifySyntinel(turnContext, channelId, userId, notificationId, answer);
                                             }
                                             else
                                             {
@@ -301,29 +301,31 @@ namespace SyntinelBot
 
         private async Task<bool> AcknowledgeNotification(string channelId, string userId, Guid notificationId)
         {
-            bool success = false;
-            if (!string.IsNullOrWhiteSpace(channelId) && !string.IsNullOrWhiteSpace(userId) && notificationId != Guid.Empty)
-            {
-                var storageKey = $"{channelId}/{userId.Replace(":", ";")}.UserState";
-                var userState = _botStore.ReadAsync<UserState>(new[] { storageKey }).Result?.FirstOrDefault().Value;
-                if (userState != null)
-                {
-                    foreach (var notification in userState.Notifications)
-                    {
-                        if (notification.Id == notificationId)
-                        {
-                            notification.Acknowledged = true;
-                            Dictionary<string, object>  changes = new Dictionary<string, object>();
-                            changes.Add(storageKey, userState);
-                            await _botStore.WriteAsync(changes);
-                            success = true;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            return success;
+            // TODO: Need to handle broadcast message later
+            return true;
+//            bool success = false;
+//            if (!string.IsNullOrWhiteSpace(channelId) && !string.IsNullOrWhiteSpace(userId) && notificationId != Guid.Empty)
+//            {
+//                var storageKey = $"{channelId}/{userId.Replace(":", ";")}.UserState";
+//                var userState = _botStore.ReadAsync<UserState>(new[] { storageKey }).Result?.FirstOrDefault().Value;
+//                if (userState != null)
+//                {
+//                    foreach (var notification in userState.Notifications)
+//                    {
+//                        if (notification.Id == notificationId)
+//                        {
+//                            notification.Acknowledged = true;
+//                            Dictionary<string, object>  changes = new Dictionary<string, object>();
+//                            changes.Add(storageKey, userState);
+//                            await _botStore.WriteAsync(changes);
+//                            success = true;
+//                            break;
+//                        }
+//                    }
+//                }
+//            }
+//
+//            return success;
         }
 
         private async Task ListUserNotificationsAsync(ITurnContext turnContext, string activityText, bool detailed = false)
@@ -375,39 +377,31 @@ namespace SyntinelBot
 
         private void SaveNewUserIfNotFound(ITurnContext turnContext)
         {
-            var storageKey = $"{turnContext.Activity.ChannelId}/{turnContext.Activity.From.Id}".Replace(":", ";");
+            try
+            {
+                var storageKey = $"{turnContext.Activity.ChannelId}/{turnContext.Activity.From.Id}".Replace(":", ";");
 
-            if (!_registeredUsers.Users.ContainsKey(storageKey))
-            {
-                var newUser = new User
+                if (!_registeredUsers.Users.ContainsKey(storageKey))
                 {
-                    Alias = $"{turnContext.Activity.From.Name}@{turnContext.Activity.ChannelId}",
-                    BotId = turnContext.Activity.Recipient.Id,
-                    BotName = turnContext.Activity.Recipient.Name,
-                    ChannelId = turnContext.Activity.ChannelId,
-                    Id = turnContext.Activity.From.Id,
-                    Name = turnContext.Activity.From.Name,
-                    ServiceUrl = turnContext.Activity.ServiceUrl,
-                    TenantId = string.Empty,
-                };
-                _registeredUsers.Users.Add(storageKey, newUser);
-                var json = JsonConvert.SerializeObject(_registeredUsers, Formatting.Indented);
-                File.WriteAllText(_userRegistry, json);
+                    var newUser = new User
+                    {
+                        Alias = $"{turnContext.Activity.From.Name}@{turnContext.Activity.ChannelId}".Replace(" ", "_"),
+                        BotId = turnContext.Activity.Recipient.Id,
+                        BotName = turnContext.Activity.Recipient.Name,
+                        ChannelId = turnContext.Activity.ChannelId,
+                        Id = turnContext.Activity.From.Id,
+                        Name = turnContext.Activity.From.Name,
+                        ServiceUrl = turnContext.Activity.ServiceUrl,
+                        TenantId = string.Empty,
+                    };
+                    _registeredUsers.Users.Add(storageKey, newUser);
+                    var json = JsonConvert.SerializeObject(_registeredUsers, Formatting.Indented);
+                    File.WriteAllText(_userRegistry, json);
+                }
             }
-            else if (turnContext.Activity.ChannelId == "emulator")
+            catch (Exception e)
             {
-                var newUser = new User
-                {
-                    Alias = $"{turnContext.Activity.From.Name}@{turnContext.Activity.ChannelId}",
-                    BotId = turnContext.Activity.Recipient.Id,
-                    BotName = turnContext.Activity.Recipient.Name,
-                    ChannelId = turnContext.Activity.ChannelId,
-                    Id = turnContext.Activity.From.Id,
-                    Name = turnContext.Activity.From.Name,
-                    ServiceUrl = turnContext.Activity.ServiceUrl,
-                    TenantId = string.Empty,
-                };
-                _registeredUsers.Users[storageKey] = newUser;
+                _logger.LogError(e.Message);
             }
         }
 
@@ -510,6 +504,8 @@ namespace SyntinelBot
                         Target = machineName,
                         From = string.Empty,
                         To = string.Empty,
+                        // ConversationId = turnContext.Activity.Conversation.Id,
+                        Initiator = turnContext.Activity.From,
                         NotificationTime = DateTime.Now,
                     };
 
@@ -669,9 +665,18 @@ namespace SyntinelBot
                     var account = new MicrosoftAppCredentials(_appId, _password);
                     var client = new ConnectorClient(new Uri(serviceUrl), account);
 
-                    // Note that Async version seems to have BUG
-                    var conversation = client.Conversations.CreateDirectConversation(botAccount, userAccount);
-                    conversationId = conversation.Id;
+                    // Reuse existing conversation  if recipient is a channel
+                    if (recipient.IsChannel)
+                    {
+                        conversationId = recipient.ConversationId;
+                    }
+                    else
+                    {
+                        // Note that Async version seems to have BUG
+                        var conversation = client.Conversations.CreateDirectConversation(botAccount, userAccount);
+                        conversationId = conversation.Id;
+                    }
+
                     message.Conversation = new ConversationAccount(id: conversationId);
                     await client.Conversations.SendToConversationAsync((Activity)message);
                 }
@@ -684,31 +689,36 @@ namespace SyntinelBot
             return notificationId;
         }
 
-        private async Task NotifySyntinel(string txtMessage)
+        private async Task NotifySyntinel(ITurnContext turnContext, string channelId, string userId, Guid notificationId, string txtMessage)
         {
             if (_registeredUsers != null)
             {
-                var emulator = _registeredUsers.Users["emulator/19ea3758-ed8f-43b7-b992-65029af38774"];
-                if (emulator != null)
+                if (!string.IsNullOrWhiteSpace(channelId) && !string.IsNullOrWhiteSpace(userId) && notificationId != Guid.Empty)
                 {
-                    var botAccount = new ChannelAccount(emulator.BotId, emulator.BotName);
-                    var userAccount = new ChannelAccount(emulator.Id, emulator.Name);
-                    MicrosoftAppCredentials.TrustServiceUrl(emulator.ServiceUrl);
-                    var account = new MicrosoftAppCredentials(_appId, _password);
-                    var client = new ConnectorClient(new Uri(emulator.ServiceUrl), account);
-
-                    var message = Activity.CreateMessageActivity();
-                    message.From = botAccount;
-                    message.Recipient = userAccount;
-                    message.Text = txtMessage;
-                    message.Locale = "en-us";
-
-                    // Note that Async version seems to have BUG
-                    var conversation = client.Conversations.CreateDirectConversation(botAccount, userAccount);
-                    string conversationId = conversation.Id;
-                    message.Conversation = new ConversationAccount(id: conversationId);
-                    await client.Conversations.SendToConversationAsync((Activity)message);
-                    // await _emulatorContext?.SendActivityAsync(txtMessage);
+                    try
+                    {
+                        var storageKey = $"{channelId}/{userId.Replace(":", ";")}.UserState";
+                        var userState = _botStore.ReadAsync<UserState>(new[] { storageKey }).Result?.FirstOrDefault().Value;
+                        if (userState != null)
+                        {
+                            foreach (var notification in userState.Notifications)
+                            {
+                                if (notification.Id == notificationId)
+                                {
+                                    var message = Activity.CreateMessageActivity();
+                                    message.Text = txtMessage;
+                                    message.Locale = "en-us";
+                                    message.Conversation = new ConversationAccount(id: notification.ConversationId);
+                                    turnContext.SendActivityAsync(message);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        _logger.LogError(e.Message);
+                    }
                 }
             }
         }

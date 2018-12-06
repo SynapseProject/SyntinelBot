@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>netcoreapp2.0</TargetFramework>
-    <CodeAnalysisRuleSet>EchoBotWithCounter.ruleset</CodeAnalysisRuleSet>
+    <CodeAnalysisRuleSet>SyntinelBotWithCounter.ruleset</CodeAnalysisRuleSet>
     <UserSecretsId>96a8c224-adcf-4d70-a854-241c9b32746b</UserSecretsId>
   </PropertyGroup>
 

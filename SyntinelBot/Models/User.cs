@@ -22,5 +22,9 @@ namespace SyntinelBot
         public string ServiceUrl { get; set; }
 
         public string TenantId { get; set; }
+
+        public bool IsChannel { get; set; } = false;
+
+        public string ConversationId { get; set; }
     }
 }
