@@ -48,6 +48,7 @@ namespace SyntinelBot
         private string _password = string.Empty;
         private string _cardLocation = string.Empty;
         private ITurnContext _emulatorContext = null;
+        private static string _conversationId = string.Empty;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="SyntinelBot"/> class.
@@ -123,6 +124,7 @@ namespace SyntinelBot
                     state.Name = turnContext.Activity.From.Name;
                     state.ChannelId = turnContext.Activity.ChannelId;
                     state.ServiceUrl = turnContext.Activity.ServiceUrl;
+                    state.ConversationId = turnContext.Activity.Conversation.Id;
 
                     // Set the property using the accessor.
                     await _accessors.UserState.SetAsync(turnContext, state);
@@ -131,10 +133,11 @@ namespace SyntinelBot
                     await _accessors.ConversationState.SaveChangesAsync(turnContext);
 
                     var msg = $"Turn {state.TurnCount} " +
+                              $"Conversation Id: {state.ConversationId}" +
                               $"Id: {state.Id} " +
+                              $"Name: {state.Name} " +
                               $"BotId: {state.BotId} " +
                               $"BotName: {state.BotName} " +
-                              $"Name: {state.Name} " +
                               $"ChannelId: {state.ChannelId} " +
                               $"ServiceUrl: {state.ServiceUrl} " +
                               $"Notifications: {state.Notifications?.Count} " +
@@ -208,6 +211,7 @@ namespace SyntinelBot
                                 break;
                             case "ignore":
                                 answer = $"Notification to {action} {instanceName} is ignored.";
+                                NotifySyntinel(turnContext, channelId, userId, notificationId, answer);
                                 break;
                             default:
                                 answer = "I am unable to process your request. Please contact the administrator.";
@@ -249,7 +253,7 @@ namespace SyntinelBot
                                             if (AcknowledgeNotification(channelId, userId, notificationId).Result)
                                             {
                                                 answer = $"Job {jobId} started to {action} {instanceName} from t2.large to {instanceType}.";
-                                                // NotifySyntinel(turnContext, channelId, userId, notificationId, answer);
+                                                NotifySyntinel(turnContext, channelId, userId, notificationId, answer);
                                             }
                                             else
                                             {
@@ -259,6 +263,7 @@ namespace SyntinelBot
                                         else
                                         {
                                             answer = $"Notification to {action} {instanceName} is ignored.";
+                                            NotifySyntinel(turnContext, channelId, userId, notificationId, answer);
                                         }
 
                                         break;
@@ -442,6 +447,9 @@ namespace SyntinelBot
                     if (notificationId != Guid.Empty)
                     {
                         answer = $"Notification {notificationId} has been sent to {userAlias}.";
+
+                        // Save conversationId for later notification to syntinel@directline
+                        _conversationId = turnContext.Activity.Conversation.Id;
                     }
                 }
             }
@@ -487,7 +495,7 @@ namespace SyntinelBot
             var filePath = string.Empty;
             notificationId = notificationId != Guid.Empty ? notificationId : Guid.NewGuid();
             filePath = $"{_cardLocation}{action}.{channelId}.json";
-            var storageKey = $"{channelId}/{recipient.Id.Replace(":", ";")}.UserState";
+            var userStateKey = $"{channelId}/{recipient.Id.Replace(":", ";")}.UserState";
             var conversationId = string.Empty;
 
             try
@@ -510,7 +518,7 @@ namespace SyntinelBot
                     };
 
                     var changes = new Dictionary<string, object>();
-                    var userState = _botStore.ReadAsync<UserState>(new[] { storageKey }).Result?.FirstOrDefault().Value;
+                    var userState = _botStore.ReadAsync<UserState>(new[] { userStateKey }).Result?.FirstOrDefault().Value;
 
                     if (userState == null)
                     {
@@ -531,7 +539,10 @@ namespace SyntinelBot
                         userState.Notifications.Add(notification);
                     }
 
-                    changes.Add(storageKey, userState);
+                    // Store notification separately
+                    var notificationKey = $"{notificationId}.Notification";
+                    changes.Add(userStateKey, userState);
+                    changes.Add(notificationKey, notification);
                     await _botStore.WriteAsync(changes);
                 }
 
@@ -697,22 +708,27 @@ namespace SyntinelBot
                 {
                     try
                     {
-                        var storageKey = $"{channelId}/{userId.Replace(":", ";")}.UserState";
-                        var userState = _botStore.ReadAsync<UserState>(new[] { storageKey }).Result?.FirstOrDefault().Value;
-                        if (userState != null)
+                        // Send notification from SyntinelBot@BP to Syntinel@BP
+                        var syntinelBot = _registeredUsers.Users.Values.First(u => u.Alias == "syntinelbot@directline");
+                        var syntinel = _registeredUsers.Users.Values.First(u => u.Alias == "syntinel@directline");
+                        if (syntinel != null && syntinelBot != null && !string.IsNullOrWhiteSpace(_conversationId))
                         {
-                            foreach (var notification in userState.Notifications)
-                            {
-                                if (notification.Id == notificationId)
-                                {
-                                    var message = Activity.CreateMessageActivity();
-                                    message.Text = txtMessage;
-                                    message.Locale = "en-us";
-                                    message.Conversation = new ConversationAccount(id: notification.ConversationId);
-                                    turnContext.SendActivityAsync(message);
-                                    break;
-                                }
-                            }
+                            var serviceUrl = syntinel.ServiceUrl;
+                            var botAccount = new ChannelAccount(syntinelBot.Id, syntinelBot.Name);
+                            var userAccount = new ChannelAccount(syntinel.Id, syntinel.Name);
+                            var account = new MicrosoftAppCredentials(_appId, _password);
+                            var tenantId = syntinel.TenantId;
+                            MicrosoftAppCredentials.TrustServiceUrl(serviceUrl);
+                            var client = new ConnectorClient(new Uri(serviceUrl), account);
+                            // var conversation = await client.Conversations.CreateOrGetDirectConversation(botAccount, userAccount, tenantId);
+
+                            var message = Activity.CreateMessageActivity();
+                            message.From = botAccount;
+                            message.Recipient = userAccount;
+                            message.Locale = "en-us";
+                            message.Text = txtMessage;
+                            message.Conversation = new ConversationAccount(id: _conversationId);
+                            await client.Conversations.SendToConversationAsync((Activity)message);
                         }
                     }
                     catch (Exception e)

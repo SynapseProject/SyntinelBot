@@ -36,6 +36,8 @@ namespace SyntinelBot
 
         public List<Notification> Notifications { get; set; }
 
+        public string ConversationId { get; set; }
+
         public string ETag { get; set; }
     }
 }

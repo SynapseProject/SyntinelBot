@@ -1,7 +1,31 @@
 {
   "Users": {
+    "directline/eb571575-0d05-424d-b854-ff7edc4ee388": {
+      "Alias": "syntinel@directline",
+      "Id": "eb571575-0d05-424d-b854-ff7edc4ee388",
+      "BotId": "syntinelbot2@tL3pdyy0qQM",
+      "BotName": "SyntinelBot",
+      "ChannelId": "directline",
+      "Name": "",
+      "ServiceUrl": "https://directline.botframework.com/",
+      "TenantId": "",
+      "IsChannel": false,
+      "ConversationId": null
+    },
+    "directline/syntinelbot2@tL3pdyy0qQM": {
+      "Alias": "syntinelbot@directline",
+      "Id": "syntinelbot2@tL3pdyy0qQM",
+      "BotId": "",
+      "BotName": "",
+      "ChannelId": "directline",
+      "Name": "SyntinelBot",
+      "ServiceUrl": "https://directline.botframework.com/",
+      "TenantId": "",
+      "IsChannel": false,
+      "ConversationId": null
+    },
     "emulator/1": {
-      "Alias": "syntinelbot@cloud",
+      "Alias": "syntinelbot@emulator",
       "Id": "1",
       "BotId": "",
       "BotName": "",
@@ -156,13 +180,13 @@
       "IsChannel": false,
       "ConversationId": null
     },
-    "directline/eb571575-0d05-424d-b854-ff7edc4ee388": {
-      "Alias": "Syntinel@BP@directline",
-      "Id": "eb571575-0d05-424d-b854-ff7edc4ee388",
+    "directline/1N3OHpvGELeBj2fo3JMUXV": {
+      "Alias": "@directline",
+      "Id": "1N3OHpvGELeBj2fo3JMUXV",
       "BotId": "syntinelbot2@tL3pdyy0qQM",
       "BotName": "SyntinelBot",
       "ChannelId": "directline",
-      "Name": "Syntinel@BP",
+      "Name": null,
       "ServiceUrl": "https://directline.botframework.com/",
       "TenantId": "",
       "IsChannel": false,
