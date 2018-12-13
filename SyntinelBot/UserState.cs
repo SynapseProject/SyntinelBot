@@ -39,5 +39,11 @@ namespace SyntinelBot
         public string ConversationId { get; set; }
 
         public string ETag { get; set; }
+
+        public string MessageText { get; set; }
+
+        public object MessageValue { get; set; }
+
+        public string MessageValueType { get; set; }
     }
 }

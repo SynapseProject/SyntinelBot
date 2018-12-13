@@ -1,7 +1,4 @@
-﻿// Copyright (c) Microsoft Corporation. All rights reserved.
-// Licensed under the MIT License.
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -47,7 +44,6 @@ namespace SyntinelBot
         private string _appId = string.Empty;
         private string _password = string.Empty;
         private string _cardLocation = string.Empty;
-        private ITurnContext _emulatorContext = null;
         private static string _conversationId = string.Empty;
 
         /// <summary>
@@ -125,6 +121,9 @@ namespace SyntinelBot
                     state.ChannelId = turnContext.Activity.ChannelId;
                     state.ServiceUrl = turnContext.Activity.ServiceUrl;
                     state.ConversationId = turnContext.Activity.Conversation.Id;
+                    state.MessageText = turnContext.Activity.Text;
+                    state.MessageValue = turnContext.Activity.Value;
+                    state.MessageValueType = turnContext.Activity.ValueType;
 
                     // Set the property using the accessor.
                     await _accessors.UserState.SetAsync(turnContext, state);
@@ -133,13 +132,15 @@ namespace SyntinelBot
                     await _accessors.ConversationState.SaveChangesAsync(turnContext);
 
                     var msg = $"Turn {state.TurnCount} " +
-                              $"Conversation Id: {state.ConversationId}" +
+                              $"Conversation Id: {state.ConversationId} " +
                               $"Id: {state.Id} " +
                               $"Name: {state.Name} " +
                               $"BotId: {state.BotId} " +
                               $"BotName: {state.BotName} " +
                               $"ChannelId: {state.ChannelId} " +
                               $"ServiceUrl: {state.ServiceUrl} " +
+                              $"Message Text: {state.MessageText} " +
+                              $"Message Value: {state.MessageValue} " +
                               $"Notifications: {state.Notifications?.Count} " +
                               $"Jobs: {state.Jobs?.Count}";
                     _logger.LogInformation(msg);

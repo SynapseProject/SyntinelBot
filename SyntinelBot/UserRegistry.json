@@ -180,14 +180,14 @@
       "IsChannel": false,
       "ConversationId": null
     },
-    "directline/1N3OHpvGELeBj2fo3JMUXV": {
-      "Alias": "@directline",
-      "Id": "1N3OHpvGELeBj2fo3JMUXV",
-      "BotId": "syntinelbot2@tL3pdyy0qQM",
+    "webchat/58Do28Qswrv": {
+      "Alias": "You@webchat",
+      "Id": "58Do28Qswrv",
+      "BotId": "syntinelbot2@55hp5uQ5IPI",
       "BotName": "SyntinelBot",
-      "ChannelId": "directline",
-      "Name": null,
-      "ServiceUrl": "https://directline.botframework.com/",
+      "ChannelId": "webchat",
+      "Name": "You",
+      "ServiceUrl": "https://webchat.botframework.com/",
       "TenantId": "",
       "IsChannel": false,
       "ConversationId": null
