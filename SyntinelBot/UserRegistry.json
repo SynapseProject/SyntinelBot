@@ -72,18 +72,6 @@
       "IsChannel": false,
       "ConversationId": null
     },
-    "msteams/29;1pRKpcg_a1rfT4PtimE70m_TT1L8RUzGXfIx71AfYJq_RECNLYa4YoHltWdcvBoefnK55Myybq9gYpGHF3ABoNA": {
-      "Alias": "shirley@msteams",
-      "Id": "29:1pRKpcg_a1rfT4PtimE70m_TT1L8RUzGXfIx71AfYJq_RECNLYa4YoHltWdcvBoefnK55Myybq9gYpGHF3ABoNA",
-      "BotId": "28:b4e8dc4d-86fd-4675-bee0-00d4ecc35f4d",
-      "BotName": "SyntinelBot",
-      "ChannelId": "msteams",
-      "Name": "Shirley Davis",
-      "ServiceUrl": "https://smba.trafficmanager.net/apac/",
-      "TenantId": "a12bfa5b-4fe9-4755-83f0-a4a6ee8f2277",
-      "IsChannel": false,
-      "ConversationId": null
-    },
     "msteams/29;1qabkb36ivJfq1RaTWsZKO3U4yVdk_JoipoLKU29qXXc22ZZ7qR0_Ifg4yNVKGKF-v2InhTuNLG3DU1UND1mlRw": {
       "Alias": "yang@msteams",
       "Id": "29:1qabkb36ivJfq1RaTWsZKO3U4yVdk_JoipoLKU29qXXc22ZZ7qR0_Ifg4yNVKGKF-v2InhTuNLG3DU1UND1mlRw",
@@ -181,7 +169,7 @@
       "ConversationId": null
     },
     "webchat/58Do28Qswrv": {
-      "Alias": "You@webchat",
+      "Alias": "client@webchat",
       "Id": "58Do28Qswrv",
       "BotId": "syntinelbot2@55hp5uQ5IPI",
       "BotName": "SyntinelBot",
@@ -189,6 +177,30 @@
       "Name": "You",
       "ServiceUrl": "https://webchat.botframework.com/",
       "TenantId": "",
+      "IsChannel": false,
+      "ConversationId": null
+    },
+    "webchat/syntinelbot2@55hp5uQ5IPI": {
+      "Alias": "syntinelbot@webchat",
+      "Id": "syntinelbot2@55hp5uQ5IPI",
+      "BotId": "",
+      "BotName": "",
+      "ChannelId": "webchat",
+      "Name": "SyntinelBot",
+      "ServiceUrl": "https://webchat.botframework.com/",
+      "TenantId": "",
+      "IsChannel": false,
+      "ConversationId": null
+    },
+    "msteams/29;1pRKpcg_a1rfT4PtimE70m_TT1L8RUzGXfIx71AfYJq_RECNLYa4YoHltWdcvBoefnK55Myybq9gYpGHF3ABoNA": {
+      "Alias": "Shirley_Davis@msteams",
+      "Id": "29:1pRKpcg_a1rfT4PtimE70m_TT1L8RUzGXfIx71AfYJq_RECNLYa4YoHltWdcvBoefnK55Myybq9gYpGHF3ABoNA",
+      "BotId": "28:b4e8dc4d-86fd-4675-bee0-00d4ecc35f4d",
+      "BotName": "SyntinelBot",
+      "ChannelId": "msteams",
+      "Name": "Shirley Davis",
+      "ServiceUrl": "https://smba.trafficmanager.net/apac/",
+      "TenantId": "a12bfa5b-4fe9-4755-83f0-a4a6ee8f2277",
       "IsChannel": false,
       "ConversationId": null
     }

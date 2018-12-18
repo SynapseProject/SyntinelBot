@@ -32,7 +32,7 @@ namespace SyntinelBot
     public class SyntinelBot : IBot
     {
         private readonly BotAccessors _accessors;
-        private readonly ILogger _logger;
+        private readonly ILogger<SyntinelBot> _logger;
         private IConfiguration _config;
         private RegisteredUsers _registeredUsers;
         private IStorage _botStore;
@@ -52,14 +52,9 @@ namespace SyntinelBot
         /// <param name="accessors">A class containing <see cref="IStatePropertyAccessor{T}"/> used to manage state.</param>
         /// <param name="loggerFactory">A <see cref="ILoggerFactory"/> that is hooked to the Azure App Service provider.</param>
         /// <seealso cref="https://docs.microsoft.com/en-us/aspnet/core/fundamentals/logging/?view=aspnetcore-2.1#windows-eventlog-provider"/>
-        public SyntinelBot(BotAccessors accessors, ILoggerFactory loggerFactory, IConfiguration config)
+        public SyntinelBot(BotAccessors accessors, ILogger<SyntinelBot> logger, IConfiguration config)
         {
-            if (loggerFactory == null)
-            {
-                throw new ArgumentNullException(nameof(loggerFactory));
-            }
-
-            _logger = loggerFactory.CreateLogger<SyntinelBot>();
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _logger.LogTrace("Syntinel turn starts.");
 
             _accessors = accessors ?? throw new ArgumentNullException(nameof(accessors));
@@ -80,7 +75,7 @@ namespace SyntinelBot
         }
 
         /// <summary>
-        /// Every conversation turn for our Echo Bot will call this method.
+        /// Every conversation turn for our Bot will call this method.
         /// There are no dialogs used, since it's "single turn" processing, meaning a single
         /// request and response.
         /// </summary>
@@ -110,7 +105,7 @@ namespace SyntinelBot
                 try
                 {
                     // Get the conversation state from the turn context.
-                    var state = await _accessors.UserState.GetAsync(turnContext, () => new UserState());
+                    var state = await _accessors.UserDataAccessor.GetAsync(turnContext, () => new UserData());
 
                     // Bump the turn count for this conversation.
                     state.TurnCount++;
@@ -126,10 +121,10 @@ namespace SyntinelBot
                     state.MessageValueType = turnContext.Activity.ValueType;
 
                     // Set the property using the accessor.
-                    await _accessors.UserState.SetAsync(turnContext, state);
+                    await _accessors.UserDataAccessor.SetAsync(turnContext, state);
 
                     // Save the new turn count into the conversation state.
-                    await _accessors.ConversationState.SaveChangesAsync(turnContext);
+                    await _accessors.UserState.SaveChangesAsync(turnContext);
 
                     var msg = $"Turn {state.TurnCount} " +
                               $"Conversation Id: {state.ConversationId} " +
@@ -343,7 +338,7 @@ namespace SyntinelBot
 
             if (_botStore != null)
             {
-                var userState = _botStore.ReadAsync<UserState>(new[] { storageKey }).Result?.FirstOrDefault().Value;
+                var userState = _botStore.ReadAsync<UserData>(new[] { storageKey }).Result?.FirstOrDefault().Value;
                 if (userState != null)
                 {
                     var count = userState.Notifications.Where(n => !n.Acknowledged).Count();
@@ -381,14 +376,29 @@ namespace SyntinelBot
             await turnContext.SendActivityAsync(answer);
         }
 
+        /// <summary>
+        /// Capture new user information and writes the whole user list to a json file.
+        /// </summary>
         private void SaveNewUserIfNotFound(ITurnContext turnContext)
         {
+            // TODO: Capture tenant id is user is from Microsoft Teams.
+            // See TeamsChannelData.
             try
             {
                 var storageKey = $"{turnContext.Activity.ChannelId}/{turnContext.Activity.From.Id}".Replace(":", ";");
 
-                if (!_registeredUsers.Users.ContainsKey(storageKey))
+                if (_registeredUsers?.Users != null && !_registeredUsers.Users.ContainsKey(storageKey))
                 {
+                    var tenantId = string.Empty;
+                    if (turnContext.Activity.ChannelId == "msteams")
+                    {
+                        var channelData = turnContext.Activity.GetChannelData<TeamsChannelData>();
+                        if (channelData != null)
+                        {
+                            tenantId = channelData.Tenant.Id;
+                        }
+                    }
+
                     var newUser = new User
                     {
                         Alias = $"{turnContext.Activity.From.Name}@{turnContext.Activity.ChannelId}".Replace(" ", "_"),
@@ -398,7 +408,7 @@ namespace SyntinelBot
                         Id = turnContext.Activity.From.Id,
                         Name = turnContext.Activity.From.Name,
                         ServiceUrl = turnContext.Activity.ServiceUrl,
-                        TenantId = string.Empty,
+                        TenantId = tenantId
                     };
                     _registeredUsers.Users.Add(storageKey, newUser);
                     var json = JsonConvert.SerializeObject(_registeredUsers, Formatting.Indented);
@@ -423,7 +433,6 @@ namespace SyntinelBot
             }
             else
             {
-                _emulatorContext = turnContext.Activity.ChannelId == "emulator" ? turnContext : null;
                 var userAlias = args[1].ToLowerInvariant();
                 var pos = userAlias.LastIndexOf('@');
                 var channelId = pos != -1 ? userAlias.Substring(pos + 1) : string.Empty;
@@ -519,11 +528,11 @@ namespace SyntinelBot
                     };
 
                     var changes = new Dictionary<string, object>();
-                    var userState = _botStore.ReadAsync<UserState>(new[] { userStateKey }).Result?.FirstOrDefault().Value;
+                    var userState = _botStore.ReadAsync<UserData>(new[] { userStateKey }).Result?.FirstOrDefault().Value;
 
                     if (userState == null)
                     {
-                        userState = new UserState()
+                        userState = new UserData()
                         {
                             Id = recipient.Id,
                             BotId = recipient.BotId,
@@ -621,11 +630,11 @@ namespace SyntinelBot
                     };
 
                     var changes = new Dictionary<string, object>();
-                    var userState = _botStore.ReadAsync<UserState>(new[] { storageKey }).Result?.FirstOrDefault().Value;
+                    var userState = _botStore.ReadAsync<UserData>(new[] { storageKey }).Result?.FirstOrDefault().Value;
 
                     if (userState == null)
                     {
-                        userState = new UserState()
+                        userState = new UserData()
                         {
                             Id = recipient.Id,
                             BotId = recipient.BotId,

@@ -8,11 +8,10 @@ using SyntinelBot.Models;
 namespace SyntinelBot
 {
     /// <summary>
-    /// Stores counter state for the conversation.
-    /// Stored in <see cref="Microsoft.Bot.Builder.ConversationState"/> and
+    /// Stored in <see cref="Microsoft.Bot.Builder.UserState"/> and
     /// backed by <see cref="Microsoft.Bot.Builder.MemoryStorage"/>.
     /// </summary>
-    public class UserState : IStoreItem
+    public class UserData : IStoreItem
     {
         /// <summary>
         /// Gets or sets the number of turns in the conversation.
