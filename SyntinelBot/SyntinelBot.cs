@@ -197,7 +197,7 @@ namespace SyntinelBot
                                 if (AcknowledgeNotification(channelId, userId, notificationId).Result)
                                 {
                                     answer = $"Job {jobId} started to {action} {instanceName} from t2.large to {instanceType}.";
-                                    NotifySyntinel(turnContext, channelId, userId, notificationId, answer);
+                                    await NotifySyntinelAsync(turnContext, channelId, userId, notificationId, answer);
                                 }
                                 else
                                 {
@@ -207,7 +207,7 @@ namespace SyntinelBot
                                 break;
                             case "ignore":
                                 answer = $"Notification to {action} {instanceName} is ignored.";
-                                NotifySyntinel(turnContext, channelId, userId, notificationId, answer);
+                                await NotifySyntinelAsync(turnContext, channelId, userId, notificationId, answer);
                                 break;
                             default:
                                 answer = "I am unable to process your request. Please contact the administrator.";
@@ -249,7 +249,7 @@ namespace SyntinelBot
                                             if (AcknowledgeNotification(channelId, userId, notificationId).Result)
                                             {
                                                 answer = $"Job {jobId} started to {action} {instanceName} from t2.large to {instanceType}.";
-                                                NotifySyntinel(turnContext, channelId, userId, notificationId, answer);
+                                                await NotifySyntinelAsync(turnContext, channelId, userId, notificationId, answer);
                                             }
                                             else
                                             {
@@ -259,7 +259,7 @@ namespace SyntinelBot
                                         else
                                         {
                                             answer = $"Notification to {action} {instanceName} is ignored.";
-                                            NotifySyntinel(turnContext, channelId, userId, notificationId, answer);
+                                            await NotifySyntinelAsync(turnContext, channelId, userId, notificationId, answer);
                                         }
 
                                         break;
@@ -349,10 +349,10 @@ namespace SyntinelBot
                             switch (channelId)
                             {
                                 case "msteams":
-                                    SendTeamsInteractiveMessage(turnContext, channelId, notification.Action, notification.Target, notification.ForUser, notification.Id);
+                                    SendTeamsInteractiveMessageAsync(turnContext, channelId, notification.Action, notification.Target, notification.ForUser, notification.Id);
                                     break;
                                 case "slack":
-                                    SendSlackInteractiveMessage(turnContext, channelId, notification.Action, notification.Target, notification.ForUser, notification.Id);
+                                    SendSlackInteractiveMessageAsync(turnContext, channelId, notification.Action, notification.Target, notification.ForUser, notification.Id);
                                     break;
                                 default:
                                     break;
@@ -453,7 +453,7 @@ namespace SyntinelBot
                 }
                 else
                 {
-                    Guid notificationId = await SendNotification(turnContext, userAlias, channelId, action, machineName, isNewNotification: true);
+                    Guid notificationId = await SendNotificationAsync(turnContext, userAlias, channelId, action, machineName, isNewNotification: true);
                     if (notificationId != Guid.Empty)
                     {
                         answer = $"Notification {notificationId} has been sent to {userAlias}.";
@@ -470,7 +470,7 @@ namespace SyntinelBot
             }
         }
 
-        private async Task<Guid> SendNotification(ITurnContext turnContext, string userAlias, string channelId, string action, string machineName, bool isNewNotification = false)
+        private async Task<Guid> SendNotificationAsync(ITurnContext turnContext, string userAlias, string channelId, string action, string machineName, bool isNewNotification = false)
         {
             Guid notificationId = Guid.Empty;
             if (!string.IsNullOrWhiteSpace(userAlias) && !string.IsNullOrWhiteSpace(action) && !string.IsNullOrWhiteSpace(machineName) && _notificationChannels.Contains(channelId))
@@ -481,10 +481,10 @@ namespace SyntinelBot
                     switch (channelId)
                     {
                         case "msteams":
-                            notificationId = await SendTeamsInteractiveMessage(null, channelId, action, machineName, recipient, Guid.Empty);
+                            notificationId = await SendTeamsInteractiveMessageAsync(null, channelId, action, machineName, recipient, Guid.Empty);
                             break;
                         case "slack":
-                            notificationId = await SendSlackInteractiveMessage(null, channelId, action, machineName, recipient, Guid.Empty);
+                            notificationId = await SendSlackInteractiveMessageAsync(null, channelId, action, machineName, recipient, Guid.Empty);
                             break;
                         default:
                             break;
@@ -499,7 +499,7 @@ namespace SyntinelBot
             return notificationId;
         }
 
-        private async Task<Guid> SendTeamsInteractiveMessage(ITurnContext turnContext, string channelId, string action,
+        private async Task<Guid> SendTeamsInteractiveMessageAsync(ITurnContext turnContext, string channelId, string action,
             string machineName, User recipient, Guid notificationId)
         {
             var filePath = string.Empty;
@@ -562,7 +562,7 @@ namespace SyntinelBot
                 var attachment = new Attachment
                 {
                     ContentType = "application/vnd.microsoft.card.adaptive",
-                    Content = JsonConvert.DeserializeObject(adaptiveCardJson)
+                    Content = JsonConvert.DeserializeObject(adaptiveCardJson),
                 };
 
                 var toId = recipient.Id;
@@ -604,7 +604,7 @@ namespace SyntinelBot
             return notificationId;
         }
 
-        private async Task<Guid> SendSlackInteractiveMessage(ITurnContext turnContext, string channelId, string action, string machineName, User recipient, Guid notificationId)
+        private async Task<Guid> SendSlackInteractiveMessageAsync(ITurnContext turnContext, string channelId, string action, string machineName, User recipient, Guid notificationId)
         {
             var filePath = string.Empty;
             notificationId = notificationId != Guid.Empty ? notificationId : Guid.NewGuid();
@@ -710,7 +710,7 @@ namespace SyntinelBot
             return notificationId;
         }
 
-        private async Task NotifySyntinel(ITurnContext turnContext, string channelId, string userId, Guid notificationId, string txtMessage)
+        private async Task NotifySyntinelAsync(ITurnContext turnContext, string channelId, string userId, Guid notificationId, string txtMessage)
         {
             if (_registeredUsers != null)
             {

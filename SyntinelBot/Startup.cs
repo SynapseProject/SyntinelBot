@@ -74,6 +74,7 @@ namespace SyntinelBot
 
                 // Retrieve current endpoint.
                 var environment = _isProduction ? "production" : "development";
+
                 // The default value for reference and nullable types is null.
                 var service = botConfig.Services.FirstOrDefault(s => s.Type == "endpoint" && s.Name == environment);
                 if (!(service is EndpointService endpointService))
