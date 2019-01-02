@@ -67,5 +67,7 @@ namespace SyntinelBot
         /// </summary>
         /// <value>The <see cref="UserState"/> object.</value>
         public UserState UserState { get; }
+
+        public PrivateConversationState PrivateConversationState { get; }
     }
 }
