@@ -259,5 +259,9 @@ paket-files/
 # Python Tools for Visual Studio (PTVS)
 __pycache__/
 *.pyc
-/SyntinelBot/Properties/PublishProfiles/SyntinelBot2 - Web Deploy.pubxml
-/SyntinelBot/syntinel.bot
+
+# Project specific ignores
+SyntinelBot/syntinel.bot
+SyntinelBot/appsettings.json
+SyntinelBot/UserRegistry.json
+SyntinelBot/Properties/PublishProfiles/syntinelbot - Web Deploy.pubxml

@@ -94,56 +94,16 @@ namespace SyntinelBot
                 throw new ArgumentNullException(nameof(turnContext));
             }
 
-            SaveNewUserIfNotFound(turnContext);
+            await SaveUserIfNewAsync(turnContext);
 
             // Handle Message activity type, which is the main activity type for shown within a conversational interface
             // Message activities may contain text, speech, interactive cards, and binary or unknown attachments.
             // see https://aka.ms/about-bot-activity-message to learn more about the message and other activity types
             if (turnContext.Activity.Type == ActivityTypes.Message)
             {
+                await LogActivityMessageAsync(turnContext);
+
                 var activityText = turnContext.Activity.Text;
-                try
-                {
-                    // Get the conversation state from the turn context.
-                    var state = await _accessors.UserDataAccessor.GetAsync(turnContext, () => new UserData());
-
-                    // Bump the turn count for this conversation.
-                    state.TurnCount++;
-                    state.Id = turnContext.Activity.From.Id;
-                    state.BotId = turnContext.Activity.Recipient.Id;
-                    state.BotName = turnContext.Activity.Recipient.Name;
-                    state.Name = turnContext.Activity.From.Name;
-                    state.ChannelId = turnContext.Activity.ChannelId;
-                    state.ServiceUrl = turnContext.Activity.ServiceUrl;
-                    state.ConversationId = turnContext.Activity.Conversation.Id;
-                    state.MessageText = turnContext.Activity.Text;
-                    state.MessageValue = turnContext.Activity.Value;
-                    state.MessageValueType = turnContext.Activity.ValueType;
-
-                    // Set the property using the accessor.
-                    await _accessors.UserDataAccessor.SetAsync(turnContext, state);
-
-                    // Save the new turn count into the conversation state.
-                    await _accessors.UserState.SaveChangesAsync(turnContext);
-
-                    var msg = $"Turn {state.TurnCount} " +
-                              $"Conversation Id: {state.ConversationId} " +
-                              $"Id: {state.Id} " +
-                              $"Name: {state.Name} " +
-                              $"BotId: {state.BotId} " +
-                              $"BotName: {state.BotName} " +
-                              $"ChannelId: {state.ChannelId} " +
-                              $"ServiceUrl: {state.ServiceUrl} " +
-                              $"Message Text: {state.MessageText} " +
-                              $"Message Value: {state.MessageValue} " +
-                              $"Notifications: {state.Notifications?.Count} " +
-                              $"Jobs: {state.Jobs?.Count}";
-                    _logger.LogInformation(msg);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex.Message);
-                }
 
                 if (!string.IsNullOrWhiteSpace(activityText) &&
                     activityText.ToLowerInvariant()
@@ -300,6 +260,50 @@ namespace SyntinelBot
             }
         }
 
+        private async Task LogActivityMessageAsync(ITurnContext turnContext)
+        {
+            try
+            {
+                // Get the conversation state from the turn context.
+                var state = await _accessors.UserDataAccessor.GetAsync(turnContext, () => new UserData());
+
+                // Bump the turn count for this conversation.
+                state.TurnCount++;
+                state.Id = turnContext.Activity.From.Id;
+                state.BotId = turnContext.Activity.Recipient.Id;
+                state.BotName = turnContext.Activity.Recipient.Name;
+                state.Name = turnContext.Activity.From.Name;
+                state.ChannelId = turnContext.Activity.ChannelId;
+                state.ServiceUrl = turnContext.Activity.ServiceUrl;
+                state.ConversationId = turnContext.Activity.Conversation.Id;
+                state.MessageText = turnContext.Activity.Text;
+                state.MessageValue = turnContext.Activity.Value;
+                state.MessageValueType = turnContext.Activity.ValueType;
+
+                // Set the property using the accessor.
+                await _accessors.UserDataAccessor.SetAsync(turnContext, state);
+
+                // Save the new turn count into the conversation state.
+                await _accessors.UserState.SaveChangesAsync(turnContext);
+
+                var msg = $"Turn {state.TurnCount} " +
+                          $"Conversation Id: {state.ConversationId} " +
+                          $"Id: {state.Id} " +
+                          $"Name: {state.Name} " +
+                          $"BotId: {state.BotId} " +
+                          $"BotName: {state.BotName} " +
+                          $"ChannelId: {state.ChannelId} " +
+                          $"ServiceUrl: {state.ServiceUrl} " +
+                          $"Message Text: {state.MessageText} " +
+                          $"Message Value: {state.MessageValue} ";
+                _logger.LogInformation(msg);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex.Message);
+            }
+        }
+
         private async Task<bool> AcknowledgeNotification(string channelId, string userId, Guid notificationId)
         {
             // TODO: Need to handle broadcast message later
@@ -349,10 +353,10 @@ namespace SyntinelBot
                             switch (channelId)
                             {
                                 case "msteams":
-                                    SendTeamsInteractiveMessageAsync(turnContext, channelId, notification.Action, notification.Target, notification.ForUser, notification.Id);
+                                    await SendTeamsInteractiveMessageAsync(turnContext, channelId, notification.Action, notification.Target, notification.ForUser, notification.Id);
                                     break;
                                 case "slack":
-                                    SendSlackInteractiveMessageAsync(turnContext, channelId, notification.Action, notification.Target, notification.ForUser, notification.Id);
+                                    await SendSlackInteractiveMessageAsync(turnContext, channelId, notification.Action, notification.Target, notification.ForUser, notification.Id);
                                     break;
                                 default:
                                     break;
@@ -379,10 +383,14 @@ namespace SyntinelBot
         /// <summary>
         /// Capture new user information and writes the whole user list to a json file.
         /// </summary>
-        private void SaveNewUserIfNotFound(ITurnContext turnContext)
+        private async Task SaveUserIfNewAsync(ITurnContext turnContext)
         {
-            // TODO: Capture tenant id is user is from Microsoft Teams.
-            // See TeamsChannelData.
+            if (_userRegistry == null)
+            {
+                _logger.LogWarning("User registry json is not specified.");
+                return;
+            }
+
             try
             {
                 var storageKey = $"{turnContext.Activity.ChannelId}/{turnContext.Activity.From.Id}".Replace(":", ";");
@@ -399,6 +407,8 @@ namespace SyntinelBot
                         }
                     }
 
+                    // TODO: Capture user's Slack team/channel information
+                    // TODO: Store user information in a database, e.g. CosmoDB
                     var newUser = new User
                     {
                         Alias = $"{turnContext.Activity.From.Name}@{turnContext.Activity.ChannelId}".Replace(" ", "_"),
@@ -408,16 +418,16 @@ namespace SyntinelBot
                         Id = turnContext.Activity.From.Id,
                         Name = turnContext.Activity.From.Name,
                         ServiceUrl = turnContext.Activity.ServiceUrl,
-                        TenantId = tenantId
+                        TenantId = tenantId,
                     };
                     _registeredUsers.Users.Add(storageKey, newUser);
                     var json = JsonConvert.SerializeObject(_registeredUsers, Formatting.Indented);
-                    File.WriteAllText(_userRegistry, json);
+                    await File.WriteAllTextAsync(_userRegistry, json);
                 }
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                _logger.LogError(e.Message);
+                _logger.LogError(ex.Message);
             }
         }
 
@@ -768,10 +778,11 @@ namespace SyntinelBot
             return foundUser;
         }
 
+        // List registered users
         private async Task ListRegisteredUsersAsync(ITurnContext turnContext, CancellationToken cancellationToken)
         {
-            var answer = string.Empty;
-            if (_registeredUsers != null && _registeredUsers.Users?.Count > 0)
+            string answer;
+            if (_registeredUsers?.Users?.Count > 0)
             {
                 answer = "Registered Users:";
                 foreach (var user in _registeredUsers.Users.Values)

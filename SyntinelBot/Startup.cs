@@ -27,6 +27,9 @@ namespace SyntinelBot
         private static IStorage _botStore = null;
         private bool _isProduction = false;
         private ILogger<SyntinelBot> _logger;
+        private ConversationState _conversationState = null;
+        private UserState _userState = null;
+        private ServiceState _serviceState = null;
 
         public Startup(IHostingEnvironment env, ILogger<SyntinelBot> logger)
         {
@@ -117,12 +120,9 @@ namespace SyntinelBot
 
                 // Create Conversation State object.
                 // The Conversation State object is where we persist anything at the conversation-scope.
-                var conversationState = new ConversationState(dataStore);
-                var userState = new UserState(dataStore);
-                var serviceState = new ServiceState(dataStore);
-                options.State.Add(conversationState);
-                options.State.Add(userState);
-                options.State.Add(serviceState);
+                _conversationState = new ConversationState(dataStore);
+                _userState = new UserState(dataStore);
+                _serviceState = new ServiceState(dataStore);
             });
 
             // https://docs.microsoft.com/en-us/azure/bot-service/bot-builder-tutorial-persist-user-inputs?view=azure-bot-service-4.0&tabs=csharp
@@ -130,37 +130,28 @@ namespace SyntinelBot
             // Acessors created here are passed into the IBot-derived class on every turn.
             services.AddSingleton<BotAccessors>(sp =>
             {
-                var options = sp.GetRequiredService<IOptions<BotFrameworkOptions>>().Value;
-                if (options == null)
-                {
-                    throw new InvalidOperationException("BotFrameworkOptions must be configured prior to setting up the state accessors");
-                }
-
-                var conversationState = options.State.OfType<ConversationState>().FirstOrDefault();
-                if (conversationState == null)
+                if (_conversationState == null)
                 {
                     throw new InvalidOperationException("ConversationState must be defined and added before adding conversation-scoped state accessors.");
                 }
 
-                var userState = options.State.OfType<UserState>().FirstOrDefault();
-                if (userState == null)
+                if (_userState == null)
                 {
                     throw new InvalidOperationException("UserState must be defined and added before adding user-scoped state accessors.");
                 }
 
-                var serviceState = options.State.OfType<ServiceState>().FirstOrDefault();
-                if (serviceState == null)
+                if (_serviceState == null)
                 {
                     throw new InvalidOperationException("ServiceState must be defined and added before adding service-scoped state accessors.");
                 }
 
                 // Create the custom state accessor.
                 // State accessors enable other components to read and write individual properties of state.
-                var accessors = new BotAccessors(conversationState, userState, serviceState)
+                var accessors = new BotAccessors(_conversationState, _userState, _serviceState)
                 {
-                    UserDataAccessor = userState.CreateProperty<UserData>(BotAccessors.UserDataName),
-                    JobDataAccessor = serviceState.CreateProperty<Dictionary<string, Job>>(BotAccessors.JobDataName),
-                    NotificationDataAccessor = serviceState.CreateProperty<Dictionary<string, Notification>>(BotAccessors.NotificationDataName)
+                    UserDataAccessor = _userState.CreateProperty<UserData>(BotAccessors.UserDataName),
+                    JobDataAccessor = _serviceState.CreateProperty<Dictionary<string, Job>>(BotAccessors.JobDataName),
+                    NotificationDataAccessor = _serviceState.CreateProperty<Dictionary<string, Notification>>(BotAccessors.NotificationDataName),
                 };
 
                 return accessors;
