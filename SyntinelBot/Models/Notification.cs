@@ -8,7 +8,7 @@ namespace SyntinelBot.Models
 {
     public class Notification
     {
-        public Guid Id { get; set; }
+        public string Id { get; set; } // GUID-based id
 
         public bool Acknowledged { get; set; }
 
