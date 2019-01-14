@@ -53,6 +53,7 @@ namespace SyntinelBot
         /// <param name="logger">A <see cref="ILogger"/> The logger.</param>
         /// <seealso cref="https://docs.microsoft.com/en-us/aspnet/core/fundamentals/logging/?view=aspnetcore-2.1#windows-eventlog-provider"/>
         /// <param name="config">A <see cref="IConfiguration"/> Application configuration.</param>
+        /// TODO: WIP
         public SyntinelBot(BotAccessors accessors, ILogger<SyntinelBot> logger, IConfiguration config)
         {
             try
@@ -95,6 +96,7 @@ namespace SyntinelBot
         /// <seealso cref="BotStateSet"/>
         /// <seealso cref="ConversationState"/>
         /// <seealso cref="IMiddleware"/>
+        /// TODO: WIP
         public async Task OnTurnAsync(ITurnContext turnContext, CancellationToken cancellationToken = default(CancellationToken))
         {
             if (turnContext == null)
@@ -107,6 +109,7 @@ namespace SyntinelBot
             // Handle Message activity type, which is the main activity type for shown within a conversational interface
             // Message activities may contain text, speech, interactive cards, and binary or unknown attachments.
             // see https://aka.ms/about-bot-activity-message to learn more about the message and other activity types
+            // TODO: WIP
             if (turnContext.Activity.Type == ActivityTypes.Message)
             {
                 await LogActivityMessageAsync(turnContext);
@@ -162,7 +165,7 @@ namespace SyntinelBot
                         {
                             case "resize":
                                 var jobId = Guid.NewGuid();
-                                if (AcknowledgeNotification(channelId, userId, notificationId).Result)
+                                if (AcknowledgeNotificationAsync(channelId, userId, notificationId).Result)
                                 {
                                     answer = $"Job {jobId} started to {action} {instanceName} from t2.large to {instanceType}.";
                                     await NotifySyntinelAsync(turnContext, channelId, userId, notificationId, answer);
@@ -214,7 +217,7 @@ namespace SyntinelBot
                                         if (instanceType != "ignore")
                                         {
                                             var jobId = Guid.NewGuid();
-                                            if (AcknowledgeNotification(channelId, userId, notificationId).Result)
+                                            if (AcknowledgeNotificationAsync(channelId, userId, notificationId).Result)
                                             {
                                                 answer = $"Job {jobId} started to {action} {instanceName} from t2.large to {instanceType}.";
                                                 await NotifySyntinelAsync(turnContext, channelId, userId, notificationId, answer);
@@ -316,7 +319,8 @@ namespace SyntinelBot
             }
         }
 
-        private async Task<bool> AcknowledgeNotification(string channelId, string userId, Guid notificationId)
+        // TODO: WIP
+        private async Task<bool> AcknowledgeNotificationAsync(string channelId, string userId, Guid notificationId)
         {
             // TODO: Need to handle broadcast message later
             return true;
@@ -346,6 +350,7 @@ namespace SyntinelBot
         }
 
         // List all notifications pertaining to a user
+        // TODO: WIP
         private async Task ListUserNotificationsAsync(ITurnContext turnContext, bool detailed = false)
         {
             if (turnContext == null)
@@ -485,7 +490,7 @@ namespace SyntinelBot
                 }
                 else if (!_notificationChannels.Contains(channelId))
                 {
-                    answer = "Only channels msteams and slack are supported at the moment.";
+                    answer = "Only channels 'msteams' and 'slack' are supported at the moment.";
                 }
                 else if (turnContext.Activity.Value == null)
                 {
@@ -501,21 +506,39 @@ namespace SyntinelBot
                 }
                 else
                 {
-                    string notificationId;
                     var recipient = _registeredUsers.Users.Values.First(a => a.Alias == userAlias);
-                    object messageContent = turnContext.Activity.Value;
-                    switch (channelId)
+                    if (turnContext.Activity.Value is JObject value)
                     {
-                        case "msteams":
-                            notificationId = await SendTeamsInteractiveMessageAsync(null, channelId, string.Empty, string.Empty, recipient, Guid.Empty.ToString());
-                            answer = $"Notification {notificationId} has been sent to {userAlias}.";
-                            break;
-                        case "slack":
-                            notificationId = await SendSlackMessageAsync(recipient, messageContent);
-                            answer = $"Notification {notificationId} has been sent to {userAlias}.";
-                            break;
-                        default:
-                            break;
+                        var messageContent = value.ToObject<SlackAPI.Message>();
+                        if (messageContent != null)
+                        {
+                            _logger.LogInformation(messageContent.Text);
+                            foreach (var attachment in messageContent.Attachments)
+                            {
+                                foreach (var action in attachment.Actions)
+                                {
+                                    _logger.LogInformation($"Action: {action.name}");
+                                }
+                            }
+                        }
+
+                        switch (channelId)
+                        {
+                            case "msteams":
+                                var notificationId = await SendTeamsInteractiveMessageAsync(null, channelId, string.Empty, string.Empty, recipient, Guid.Empty.ToString());
+                                answer = $"Notification {notificationId} has been sent to {userAlias}.";
+                                break;
+                            case "slack":
+                                var isSuccess = await SendSlackMessageAsync(recipient, messageContent);
+                                answer = isSuccess ? $"Notification has been sent to {userAlias}." : $"Failed to send notification to {userAlias}";
+                                break;
+                            default:
+                                break;
+                        }
+                    }
+                    else
+                    {
+                        answer = $"Message content is empty. There is nothing to send to {userAlias}.";
                     }
                 }
             }
@@ -631,10 +654,16 @@ namespace SyntinelBot
             return notificationId;
         }
 
-        // WIP
-        private async Task<string> SendSlackMessageAsync(User recipient, object messageContent)
+        // TODO: Pending review
+        // Forward message to Slack
+        private async Task<bool> SendSlackMessageAsync(User recipient, object messageContent)
         {
-            var conversationId = string.Empty;
+            if (recipient == null || messageContent == null)
+            {
+                return false;
+            }
+
+            bool isSuccess = false;
 
             try
             {
@@ -643,7 +672,6 @@ namespace SyntinelBot
                 var fromId = recipient.BotId;
                 var fromName = recipient.BotName;
                 var serviceUrl = recipient.ServiceUrl;
-                var tenantId = recipient.TenantId;
                 var userAccount = new ChannelAccount(toId, toName);
                 var botAccount = new ChannelAccount(fromId, fromName);
 
@@ -651,33 +679,35 @@ namespace SyntinelBot
                 message.From = botAccount;
                 message.Recipient = userAccount;
                 message.ChannelData = messageContent;
-                message.Locale = "en-us";
 
                 MicrosoftAppCredentials.TrustServiceUrl(serviceUrl);
                 var account = new MicrosoftAppCredentials(_appId, _password);
                 var client = new ConnectorClient(new Uri(serviceUrl), account);
 
                 // Reuse existing conversation  if recipient is a channel
+                string conversationId;
                 if (recipient.IsChannel)
                 {
                     conversationId = recipient.ConversationId;
                 }
                 else
                 {
-                    // Note that Async version seems to have BUG
+                    // Note that Async version seems to have bug
                     var conversation = client.Conversations.CreateDirectConversation(botAccount, userAccount);
                     conversationId = conversation.Id;
                 }
 
                 message.Conversation = new ConversationAccount(id: conversationId);
-                await client.Conversations.SendToConversationAsync((Activity)message);
+                var response = await client.Conversations.SendToConversationAsync((Activity)message);
+                _logger.LogInformation($"Response id: {response.Id}");
+                isSuccess = true;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex.Message);
             }
 
-            return Guid.NewGuid().ToString();
+            return isSuccess;
         }
 
         private async Task NotifySyntinelAsync(ITurnContext turnContext, string channelId, string userId, Guid notificationId, string txtMessage)
@@ -719,6 +749,7 @@ namespace SyntinelBot
             }
         }
 
+        // DONE
         // Check if a user has been registered.
         private bool IsRegisteredUser(string userAlias)
         {
@@ -799,6 +830,7 @@ namespace SyntinelBot
             return adaptiveCardAttachment;
         }
 
+        // DONE
         // Validate if a string is a valid JSON.
         // https://stackoverflow.com/questions/14977848/how-to-make-sure-that-string-is-valid-json-using-json-net
         private bool IsValidJson(string strInput)
