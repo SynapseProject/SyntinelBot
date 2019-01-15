@@ -20,10 +20,10 @@ namespace SlackAPI
         [JsonProperty("is_admin", NullValueHandling = NullValueHandling.Ignore)]
         public bool IsAdmin { get; set; }
 
-        [JsonProperty("is_owner", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonProperty("is_bot", NullValueHandling = NullValueHandling.Ignore)]
         public bool IsBot { get; set; }
 
-        [JsonProperty("id", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonProperty("is_owner", NullValueHandling = NullValueHandling.Ignore)]
         public bool IsOwner { get; set; }
 
         [JsonProperty("is_primary_owner", NullValueHandling = NullValueHandling.Ignore)]
