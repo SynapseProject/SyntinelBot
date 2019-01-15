@@ -18,6 +18,9 @@ namespace SlackAPI
 
         // TODO: Add 'comment' field
 
+        [JsonProperty("delete_original", NullValueHandling = NullValueHandling.Ignore)]
+        public bool DeleteOriginal { get; set; }
+
         [JsonProperty("display_as_bot", NullValueHandling = NullValueHandling.Ignore)]
         public bool DisplayAsBot { get; set; }
 
@@ -55,8 +58,14 @@ namespace SlackAPI
 
         // TODO: Add 'replies' field
 
+        [JsonProperty("replace_original", NullValueHandling = NullValueHandling.Ignore)]
+        public bool ReplaceOriginal { get; set; }
+
         [JsonProperty("reply_count", NullValueHandling = NullValueHandling.Ignore)]
         public int ReplyCount { get; set; }
+
+        [JsonProperty("response_type", NullValueHandling = NullValueHandling.Ignore)]
+        public string ResponseType { get; set; } // 'in_channel' or 'ephemeral'
 
         [JsonProperty("source_team", NullValueHandling = NullValueHandling.Ignore)]
         public string SourceTeam { get; set; } // pattern	: ^[T][A-Z0-9]{8}$
@@ -89,7 +98,7 @@ namespace SlackAPI
         public string User { get; set; } // pattern	: ^[UW][A-Z0-9]{8}$
 
         [JsonProperty("user_profile", NullValueHandling = NullValueHandling.Ignore)]
-        public UserProfileShort UserProfile { get; set; }
+        public UserProfile UserProfile { get; set; }
 
         [JsonProperty("user_team", NullValueHandling = NullValueHandling.Ignore)]
         public string UserTeam { get; set; } // pattern: ^[T][A-Z0-9]{8}$

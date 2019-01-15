@@ -517,7 +517,7 @@ namespace SyntinelBot
                             {
                                 foreach (var action in attachment.Actions)
                                 {
-                                    _logger.LogInformation($"Action: {action.name}");
+                                    _logger.LogInformation($"Action: {action.Name}");
                                 }
                             }
                         }
