@@ -5,7 +5,9 @@ VisualStudioVersion = 15.0.28307.106
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SyntinelBot", "SyntinelBot\SyntinelBot.csproj", "{392B855B-6D01-4F46-BFD4-05A9507915D0}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SlackAPI", "SlackAPI\SlackAPI.csproj", "{E3E2B224-AB5C-4D95-A59D-07038C207F8E}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SlackAPI", "SlackAPI\SlackAPI.csproj", "{E3E2B224-AB5C-4D95-A59D-07038C207F8E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SyntinelBot.Tests", "SyntinelBot.Tests\SyntinelBot.Tests.csproj", "{FECA3DE4-A175-4842-8460-023B765AF81D}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -21,6 +23,10 @@ Global
 		{E3E2B224-AB5C-4D95-A59D-07038C207F8E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E3E2B224-AB5C-4D95-A59D-07038C207F8E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{E3E2B224-AB5C-4D95-A59D-07038C207F8E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FECA3DE4-A175-4842-8460-023B765AF81D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FECA3DE4-A175-4842-8460-023B765AF81D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FECA3DE4-A175-4842-8460-023B765AF81D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FECA3DE4-A175-4842-8460-023B765AF81D}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

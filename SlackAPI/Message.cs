@@ -106,9 +106,9 @@ namespace SlackAPI
         [JsonProperty("username", NullValueHandling = NullValueHandling.Ignore)]
         public string Username { get; set; }
 
-        public Message()
+        public bool IsEmpty()
         {
-            Type = "message";
+            return Attachments == null || Attachments.Count == 0 || string.IsNullOrEmpty(Text);
         }
     }
 }

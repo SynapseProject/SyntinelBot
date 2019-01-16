@@ -9,5 +9,8 @@ namespace SlackAPI
     {
         [JsonProperty("Payload", NullValueHandling = NullValueHandling.Ignore)]
         public Payload Payload { get; set; } // 'interactive_message' or a 'dialog_submission'
+
+        [JsonProperty("ApiToken")]
+        public string ApiToken { get; set; }
     }
 }

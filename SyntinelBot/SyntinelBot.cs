@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -13,46 +12,49 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using SlackAPI;
 using SyntinelBot.Models;
-using SyntinelBot.Models.Slack;
+using Attachment = Microsoft.Bot.Schema.Attachment;
+using File = System.IO.File;
 
 namespace SyntinelBot
 {
     /// <summary>
-    /// Represents a bot that processes incoming activities.
-    /// For each user interaction, an instance of this class is created and the OnTurnAsync method is called.
-    /// This is a Transient lifetime service.  Transient lifetime services are created
-    /// each time they're requested. For each Activity received, a new instance of this
-    /// class is created. Objects that are expensive to construct, or have a lifetime
-    /// beyond the single turn, should be carefully managed.
-    /// For example, the <see cref="MemoryStorage"/> object and associated
-    /// <see cref="IStatePropertyAccessor{T}"/> object are created with a singleton lifetime.
+    ///     Represents a bot that processes incoming activities.
+    ///     For each user interaction, an instance of this class is created and the OnTurnAsync method is called.
+    ///     This is a Transient lifetime service.  Transient lifetime services are created
+    ///     each time they're requested. For each Activity received, a new instance of this
+    ///     class is created. Objects that are expensive to construct, or have a lifetime
+    ///     beyond the single turn, should be carefully managed.
+    ///     For example, the <see cref="MemoryStorage" /> object and associated
+    ///     <see cref="IStatePropertyAccessor{T}" /> object are created with a singleton lifetime.
     /// </summary>
-    /// <seealso cref="https://docs.microsoft.com/en-us/aspnet/core/fundamentals/dependency-injection?view=aspnetcore-2.1"/>
+    /// <seealso cref="https://docs.microsoft.com/en-us/aspnet/core/fundamentals/dependency-injection?view=aspnetcore-2.1" />
     public class SyntinelBot : IBot
     {
+        private static readonly string _conversationId = string.Empty;
         private readonly BotAccessors _accessors;
         private readonly ILogger<SyntinelBot> _logger;
-        private IConfiguration _config;
-        private RegisteredUsers _registeredUsers;
-        private IStorage _botStore;
-        private string _userRegistry = string.Empty;
-        private string _welcomeText = string.Empty;
-        private string _msteamsMention = string.Empty;
-        private string _slackMention = string.Empty;
-        private List<string> _notificationChannels = null;
-        private string _appId = string.Empty;
-        private string _password = string.Empty;
-        private string _cardLocation = string.Empty;
-        private static string _conversationId = string.Empty;
+        private readonly string _appId = string.Empty;
+        private readonly IStorage _botStore;
+        private readonly string _cardLocation = string.Empty;
+        private readonly IConfiguration _config;
+        private readonly string _msteamsMention = string.Empty;
+        private readonly List<string> _notificationChannels;
+        private readonly string _password = string.Empty;
+        private readonly RegisteredUsers _registeredUsers;
+        private readonly string _slackMention = string.Empty;
+        private readonly string _userRegistry = string.Empty;
+        private readonly string _welcomeText = string.Empty;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="SyntinelBot"/> class.
+        ///     Initializes a new instance of the <see cref="SyntinelBot" /> class.
         /// </summary>
-        /// <param name="accessors">A class containing <see cref="IStatePropertyAccessor{T}"/> used to manage state.</param>
-        /// <param name="logger">A <see cref="ILogger"/> The logger.</param>
-        /// <seealso cref="https://docs.microsoft.com/en-us/aspnet/core/fundamentals/logging/?view=aspnetcore-2.1#windows-eventlog-provider"/>
-        /// <param name="config">A <see cref="IConfiguration"/> Application configuration.</param>
+        /// <param name="accessors">A class containing <see cref="IStatePropertyAccessor{T}" /> used to manage state.</param>
+        /// <param name="logger">A <see cref="ILogger" /> The logger.</param>
+        /// <seealso
+        ///     cref="https://docs.microsoft.com/en-us/aspnet/core/fundamentals/logging/?view=aspnetcore-2.1#windows-eventlog-provider" />
+        /// <param name="config">A <see cref="IConfiguration" /> Application configuration.</param>
         /// TODO: WIP
         public SyntinelBot(BotAccessors accessors, ILogger<SyntinelBot> logger, IConfiguration config)
         {
@@ -68,7 +70,8 @@ namespace SyntinelBot
                 _welcomeText = _config.GetSection("WelcomeText")?.Value;
                 _msteamsMention = _config.GetSection("MsTeamsMention")?.Value;
                 _slackMention = _config.GetSection("SlackMention")?.Value;
-                _notificationChannels = _config.GetSection("NotificationChannels").Get<List<string>>(); // TODO: Check if it is used?
+                _notificationChannels =
+                    _config.GetSection("NotificationChannels").Get<List<string>>(); // TODO: Check if it is used?
                 _cardLocation = _config.GetSection("CardLocation")?.Value;
 
                 _logger.LogInformation("Syntinel turn starts.");
@@ -84,25 +87,26 @@ namespace SyntinelBot
         }
 
         /// <summary>
-        /// Every conversation turn for our Bot will call this method.
-        /// There are no dialogs used, since it's "single turn" processing, meaning a single
-        /// request and response.
+        ///     Every conversation turn for our Bot will call this method.
+        ///     There are no dialogs used, since it's "single turn" processing, meaning a single
+        ///     request and response.
         /// </summary>
-        /// <param name="turnContext">A <see cref="ITurnContext"/> containing all the data needed
-        /// for processing this conversation turn. </param>
-        /// <param name="cancellationToken">(Optional) A <see cref="CancellationToken"/> that can be used by other objects
-        /// or threads to receive notice of cancellation.</param>
-        /// <returns>A <see cref="Task"/> that represents the work queued to execute.</returns>
-        /// <seealso cref="BotStateSet"/>
-        /// <seealso cref="ConversationState"/>
-        /// <seealso cref="IMiddleware"/>
+        /// <param name="turnContext">
+        ///     A <see cref="ITurnContext" /> containing all the data needed
+        ///     for processing this conversation turn.
+        /// </param>
+        /// <param name="cancellationToken">
+        ///     (Optional) A <see cref="CancellationToken" /> that can be used by other objects
+        ///     or threads to receive notice of cancellation.
+        /// </param>
+        /// <returns>A <see cref="Task" /> that represents the work queued to execute.</returns>
+        /// <seealso cref="BotStateSet" />
+        /// <seealso cref="ConversationState" />
+        /// <seealso cref="IMiddleware" />
         /// TODO: WIP
         public async Task OnTurnAsync(ITurnContext turnContext, CancellationToken cancellationToken = default(CancellationToken))
         {
-            if (turnContext == null)
-            {
-                throw new ArgumentNullException(nameof(turnContext));
-            }
+            if (turnContext == null) throw new ArgumentNullException(nameof(turnContext));
 
             await SaveUserIfNewAsync(turnContext);
 
@@ -126,9 +130,9 @@ namespace SyntinelBot
                 }
                 else if (!string.IsNullOrWhiteSpace(activityText) &&
                          activityText.ToLowerInvariant()
-                        .Replace(_msteamsMention, string.Empty)
-                        .Replace(_slackMention, string.Empty)
-                        .Trim(' ', '\r', '\n').StartsWith("notify"))
+                             .Replace(_msteamsMention, string.Empty)
+                             .Replace(_slackMention, string.Empty)
+                             .Trim(' ', '\r', '\n').StartsWith("notify"))
                 {
                     await NotifyUserAsync(turnContext, cancellationToken);
                 }
@@ -146,7 +150,7 @@ namespace SyntinelBot
                              .Replace(_slackMention, string.Empty)
                              .Trim(' ', '\r', '\n') == "notifications details")
                 {
-                    await ListUserNotificationsAsync(turnContext, detailed: true); // TODO: Check if it is still a requirement?
+                    await ListUserNotificationsAsync(turnContext, true); // TODO: Check if it is still a requirement?
                 }
                 else if (turnContext.Activity.ChannelId == "msteams" && turnContext.Activity.Value != null)
                 {
@@ -156,7 +160,7 @@ namespace SyntinelBot
                     try
                     {
                         var action = responseValue["action"].ToString();
-                        string answer = string.Empty;
+                        var answer = string.Empty;
                         var instanceType = responseValue["instanceType"].ToString();
                         var instanceName = responseValue["instanceName"].ToString();
                         Guid.TryParse(responseValue["notificationId"].ToString(), out var notificationId);
@@ -167,7 +171,8 @@ namespace SyntinelBot
                                 var jobId = Guid.NewGuid();
                                 if (AcknowledgeNotificationAsync(channelId, userId, notificationId).Result)
                                 {
-                                    answer = $"Job {jobId} started to {action} {instanceName} from t2.large to {instanceType}.";
+                                    answer =
+                                        $"Job {jobId} started to {action} {instanceName} from t2.large to {instanceType}.";
                                     await NotifySyntinelAsync(turnContext, channelId, userId, notificationId, answer);
                                 }
                                 else
@@ -199,13 +204,13 @@ namespace SyntinelBot
                         var channelId = turnContext.Activity.ChannelId;
                         var userId = turnContext.Activity.From.Id;
                         var channelData = (JObject)turnContext.Activity.ChannelData;
-                        var slackMessage = channelData.ToObject<SlackMessage>();
+                        var slackMessage = channelData.ToObject<ActionUrlInvocation>();
                         if (slackMessage != null && slackMessage.Payload?.Type == "interactive_message")
                         {
                             var firstAction = slackMessage.Payload.Actions?.FirstOrDefault();
                             if (firstAction != null)
                             {
-                                string answer = string.Empty;
+                                string answer;
                                 var action = firstAction.Name;
                                 var instanceType = firstAction.SelectedOptions.FirstOrDefault()?.Value;
                                 var instanceName = slackMessage.Payload.CallbackId.Split('/')[0];
@@ -219,29 +224,33 @@ namespace SyntinelBot
                                             var jobId = Guid.NewGuid();
                                             if (AcknowledgeNotificationAsync(channelId, userId, notificationId).Result)
                                             {
-                                                answer = $"Job {jobId} started to {action} {instanceName} from t2.large to {instanceType}.";
-                                                await NotifySyntinelAsync(turnContext, channelId, userId, notificationId, answer);
+                                                answer =
+                                                    $"Job {jobId} started to {action} {instanceName} from t2.large to {instanceType}.";
+                                                await NotifySyntinelAsync(turnContext, channelId, userId,
+                                                    notificationId, answer);
                                             }
                                             else
                                             {
-                                                answer = "Sorry, I am not able to find matching record for your request.";
+                                                answer =
+                                                    "Sorry, I am not able to find matching record for your request.";
                                             }
                                         }
                                         else
                                         {
                                             answer = $"Notification to {action} {instanceName} is ignored.";
-                                            await NotifySyntinelAsync(turnContext, channelId, userId, notificationId, answer);
+                                            await NotifySyntinelAsync(turnContext, channelId, userId, notificationId,
+                                                answer);
                                         }
 
                                         break;
                                     default:
-                                        answer = "I am unable to process your request. Please contact the administrator.";
+                                        answer =
+                                            "I am unable to process your request. Please contact the administrator.";
                                         break;
                                 }
 
                                 await turnContext.SendActivityAsync(answer, cancellationToken: cancellationToken);
                             }
-
                         }
                     }
                     catch (Exception e)
@@ -276,10 +285,10 @@ namespace SyntinelBot
             try
             {
                 // Get the conversation state from the turn context.
-                var state = await _accessors.UserDataAccessor.GetAsync(turnContext, () => new UserData()
+                var state = await _accessors.UserDataAccessor.GetAsync(turnContext, () => new UserData
                 {
                     Notifications = new List<Notification>(),
-                    Jobs = new List<Job>(),
+                    Jobs = new List<Job>()
                 });
 
                 // Bump the turn count for this conversation.
@@ -365,10 +374,10 @@ namespace SyntinelBot
             try
             {
                 // Get the user data from the turn context
-                var userData = await _accessors.UserDataAccessor.GetAsync(turnContext, () => new UserData()
+                var userData = await _accessors.UserDataAccessor.GetAsync(turnContext, () => new UserData
                 {
                     Notifications = new List<Notification>(),
-                    Jobs = new List<Job>(),
+                    Jobs = new List<Job>()
                 });
 
                 // Set the property using the accessor.
@@ -383,22 +392,17 @@ namespace SyntinelBot
 
                     // TODO: Check if detailed option is still a requirement?
                     if (detailed)
-                    {
                         foreach (var notification in userData.Notifications)
-                        {
                             switch (channelId)
                             {
                                 case "msteams":
-                                    await SendTeamsInteractiveMessageAsync(turnContext, channelId, notification.Action, notification.Target, notification.ForUser, notification.Id);
+                                    await SendTeamsInteractiveMessageAsync(turnContext, channelId, notification.Action,
+                                        notification.Target, notification.ForUser, notification.Id);
                                     break;
                                 case "slack":
                                     // await SendSlackInteractiveMessageAsync(turnContext, channelId, notification.Action, notification.Target, notification.ForUser, notification.Id);
                                     break;
-                                default:
-                                    break;
                             }
-                        }
-                    }
                 }
 
                 await turnContext.SendActivityAsync(answer);
@@ -410,7 +414,7 @@ namespace SyntinelBot
         }
 
         /// <summary>
-        /// Capture new user information and writes the whole user list to a json file.
+        ///     Capture new user information and writes the whole user list to a json file.
         /// </summary>
         private async Task SaveUserIfNewAsync(ITurnContext turnContext)
         {
@@ -430,10 +434,7 @@ namespace SyntinelBot
                     if (turnContext.Activity.ChannelId == "msteams")
                     {
                         var channelData = turnContext.Activity.GetChannelData<TeamsChannelData>();
-                        if (channelData != null)
-                        {
-                            tenantId = channelData.Tenant.Id;
-                        }
+                        if (channelData != null) tenantId = channelData.Tenant.Id;
                     }
 
                     // TODO: Capture user's Slack team/channel information
@@ -447,7 +448,7 @@ namespace SyntinelBot
                         Id = turnContext.Activity.From.Id,
                         Name = turnContext.Activity.From.Name,
                         ServiceUrl = turnContext.Activity.ServiceUrl,
-                        TenantId = tenantId,
+                        TenantId = tenantId
                     };
                     _registeredUsers.Users.Add(storageKey, newUser);
                     var json = JsonConvert.SerializeObject(_registeredUsers, Formatting.Indented);
@@ -509,8 +510,8 @@ namespace SyntinelBot
                     var recipient = _registeredUsers.Users.Values.First(a => a.Alias == userAlias);
                     if (turnContext.Activity.Value is JObject value)
                     {
-                        var messageContent = value.ToObject<SlackAPI.Message>();
-                        if (messageContent != null)
+                        var messageContent = value.ToObject<Message>();
+                        if (messageContent != null && !messageContent.IsEmpty())
                         {
                             _logger.LogInformation(messageContent.Text);
                             foreach (var attachment in messageContent.Attachments)
@@ -520,20 +521,21 @@ namespace SyntinelBot
                                     _logger.LogInformation($"Action: {action.Name}");
                                 }
                             }
-                        }
 
-                        switch (channelId)
-                        {
-                            case "msteams":
-                                var notificationId = await SendTeamsInteractiveMessageAsync(null, channelId, string.Empty, string.Empty, recipient, Guid.Empty.ToString());
-                                answer = $"Notification {notificationId} has been sent to {userAlias}.";
-                                break;
-                            case "slack":
-                                var isSuccess = await SendSlackMessageAsync(recipient, messageContent);
-                                answer = isSuccess ? $"Notification has been sent to {userAlias}." : $"Failed to send notification to {userAlias}";
-                                break;
-                            default:
-                                break;
+                            switch (channelId)
+                            {
+                                case "msteams":
+                                    var notificationId = await SendTeamsInteractiveMessageAsync(null, channelId,
+                                        string.Empty, string.Empty, recipient, Guid.Empty.ToString());
+                                    answer = $"Notification {notificationId} has been sent to {userAlias}.";
+                                    break;
+                                case "slack":
+                                    var isSuccess = await SendSlackMessageAsync(recipient, messageContent);
+                                    answer = isSuccess
+                                        ? $"Notification has been sent to {userAlias}."
+                                        : $"Failed to send notification to {userAlias}";
+                                    break;
+                            }
                         }
                     }
                     else
@@ -544,12 +546,11 @@ namespace SyntinelBot
             }
 
             if (!string.IsNullOrWhiteSpace(answer))
-            {
                 await turnContext.SendActivityAsync(answer, cancellationToken: cancellationToken);
-            }
         }
 
-        private async Task<string> SendTeamsInteractiveMessageAsync(ITurnContext turnContext, string channelId, string action,
+        private async Task<string> SendTeamsInteractiveMessageAsync(ITurnContext turnContext, string channelId,
+            string action,
             string machineName, User recipient, string notificationId)
         {
             var filePath = string.Empty;
@@ -563,7 +564,7 @@ namespace SyntinelBot
                 // Save the notification to the bot store
                 if (_botStore != null)
                 {
-                    Notification notification = new Notification()
+                    var notification = new Notification
                     {
                         Id = notificationId,
                         Acknowledged = false,
@@ -574,15 +575,14 @@ namespace SyntinelBot
                         To = string.Empty,
                         // ConversationId = turnContext.Activity.Conversation.Id,
                         Initiator = turnContext.Activity.From,
-                        NotificationTime = DateTime.Now,
+                        NotificationTime = DateTime.Now
                     };
 
                     var changes = new Dictionary<string, object>();
-                    var userState = _botStore.ReadAsync<UserData>(new[] { userStateKey }).Result?.FirstOrDefault().Value;
+                    var userState = _botStore.ReadAsync<UserData>(new[] {userStateKey}).Result?.FirstOrDefault().Value;
 
                     if (userState == null)
-                    {
-                        userState = new UserData()
+                        userState = new UserData
                         {
                             Id = recipient.Id,
                             BotId = recipient.BotId,
@@ -591,13 +591,10 @@ namespace SyntinelBot
                             ServiceUrl = recipient.ServiceUrl,
                             ChannelId = recipient.ChannelId,
                             Jobs = new List<Job>(),
-                            Notifications = new List<Notification>() { notification },
+                            Notifications = new List<Notification> {notification}
                         };
-                    }
                     else if (userState.Notifications.FirstOrDefault(n => n.Id == notificationId) == null)
-                    {
                         userState.Notifications.Add(notification);
-                    }
 
                     // Store notification separately
                     var notificationKey = $"{notificationId}.Notification";
@@ -608,11 +605,11 @@ namespace SyntinelBot
 
                 var adaptiveCardJson = File.ReadAllText(filePath);
                 adaptiveCardJson = adaptiveCardJson.Replace("[ResourceName]", machineName.ToUpperInvariant());
-                adaptiveCardJson = adaptiveCardJson.Replace("[NotificationId]", notificationId.ToString());
+                adaptiveCardJson = adaptiveCardJson.Replace("[NotificationId]", notificationId);
                 var attachment = new Attachment
                 {
                     ContentType = "application/vnd.microsoft.card.adaptive",
-                    Content = JsonConvert.DeserializeObject(adaptiveCardJson),
+                    Content = JsonConvert.DeserializeObject(adaptiveCardJson)
                 };
 
                 var toId = recipient.Id;
@@ -627,7 +624,7 @@ namespace SyntinelBot
                 var message = Activity.CreateMessageActivity();
                 message.From = botAccount;
                 message.Recipient = userAccount;
-                message.Attachments = new List<Attachment> { attachment };
+                message.Attachments = new List<Attachment> {attachment};
                 message.Locale = "en-us";
 
                 if (turnContext != null)
@@ -640,10 +637,11 @@ namespace SyntinelBot
                     var account = new MicrosoftAppCredentials(_appId, _password);
                     MicrosoftAppCredentials.TrustServiceUrl(serviceUrl);
                     var client = new ConnectorClient(new Uri(serviceUrl), account);
-                    var conversation = await client.Conversations.CreateOrGetDirectConversation(botAccount, userAccount, tenantId);
+                    var conversation =
+                        await client.Conversations.CreateOrGetDirectConversation(botAccount, userAccount, tenantId);
                     conversationId = conversation.Id;
                     message.Conversation = new ConversationAccount(id: conversationId);
-                    await client.Conversations.SendToConversationAsync((Activity)message);
+                    await client.Conversations.SendToConversationAsync((Activity) message);
                 }
             }
             catch (Exception ex)
@@ -658,12 +656,9 @@ namespace SyntinelBot
         // Forward message to Slack
         private async Task<bool> SendSlackMessageAsync(User recipient, object messageContent)
         {
-            if (recipient == null || messageContent == null)
-            {
-                return false;
-            }
+            if (recipient == null || messageContent == null) return false;
 
-            bool isSuccess = false;
+            var isSuccess = false;
 
             try
             {
@@ -698,7 +693,7 @@ namespace SyntinelBot
                 }
 
                 message.Conversation = new ConversationAccount(id: conversationId);
-                var response = await client.Conversations.SendToConversationAsync((Activity)message);
+                var response = await client.Conversations.SendToConversationAsync((Activity) message);
                 _logger.LogInformation($"Response id: {response.Id}");
                 isSuccess = true;
             }
@@ -710,12 +705,12 @@ namespace SyntinelBot
             return isSuccess;
         }
 
-        private async Task NotifySyntinelAsync(ITurnContext turnContext, string channelId, string userId, Guid notificationId, string txtMessage)
+        private async Task NotifySyntinelAsync(ITurnContext turnContext, string channelId, string userId,
+            Guid notificationId, string txtMessage)
         {
             if (_registeredUsers != null)
-            {
-                if (!string.IsNullOrWhiteSpace(channelId) && !string.IsNullOrWhiteSpace(userId) && notificationId != Guid.Empty)
-                {
+                if (!string.IsNullOrWhiteSpace(channelId) && !string.IsNullOrWhiteSpace(userId) &&
+                    notificationId != Guid.Empty)
                     try
                     {
                         // Send notification from SyntinelBot@BP to Syntinel@BP
@@ -730,6 +725,7 @@ namespace SyntinelBot
                             var tenantId = syntinel.TenantId;
                             MicrosoftAppCredentials.TrustServiceUrl(serviceUrl);
                             var client = new ConnectorClient(new Uri(serviceUrl), account);
+
                             // var conversation = await client.Conversations.CreateOrGetDirectConversation(botAccount, userAccount, tenantId);
 
                             var message = Activity.CreateMessageActivity();
@@ -738,15 +734,13 @@ namespace SyntinelBot
                             message.Locale = "en-us";
                             message.Text = txtMessage;
                             message.Conversation = new ConversationAccount(id: _conversationId);
-                            await client.Conversations.SendToConversationAsync((Activity)message);
+                            await client.Conversations.SendToConversationAsync((Activity) message);
                         }
                     }
                     catch (Exception e)
                     {
                         _logger.LogError(e.Message);
                     }
-                }
-            }
         }
 
         // DONE
@@ -756,16 +750,12 @@ namespace SyntinelBot
             var foundUser = false;
 
             if (_registeredUsers != null && !string.IsNullOrWhiteSpace(userAlias))
-            {
                 foreach (var user in _registeredUsers.Users)
-                {
                     if (userAlias.ToLowerInvariant() == user.Value.Alias)
                     {
                         foundUser = true;
                         break;
                     }
-                }
-            }
 
             return foundUser;
         }
@@ -777,10 +767,7 @@ namespace SyntinelBot
             if (_registeredUsers?.Users?.Count > 0)
             {
                 answer = "Registered Users:";
-                foreach (var user in _registeredUsers.Users.Values)
-                {
-                    answer = $"{answer}  {user.Alias}";
-                }
+                foreach (var user in _registeredUsers.Users.Values) answer = $"{answer}  {user.Alias}";
             }
             else
             {
@@ -791,34 +778,34 @@ namespace SyntinelBot
         }
 
         /// <summary>
-        /// Greet new users as they are added to the conversation.
+        ///     Greet new users as they are added to the conversation.
         /// </summary>
-        /// <param name="turnContext">A <see cref="ITurnContext"/> containing all the data needed
-        /// for processing this conversation turn. </param>
-        /// <param name="cancellationToken">(Optional) A <see cref="CancellationToken"/> that can be used by other objects
-        /// or threads to receive notice of cancellation.</param>
-        /// <returns>A <see cref="Task"/> that represents the work queued to execute.</returns>
-        /// <seealso cref="BotStateSet"/>
-        /// <seealso cref="ConversationState"/>
-        /// <seealso cref="IMiddleware"/>
+        /// <param name="turnContext">
+        ///     A <see cref="ITurnContext" /> containing all the data needed
+        ///     for processing this conversation turn.
+        /// </param>
+        /// <param name="cancellationToken">
+        ///     (Optional) A <see cref="CancellationToken" /> that can be used by other objects
+        ///     or threads to receive notice of cancellation.
+        /// </param>
+        /// <returns>A <see cref="Task" /> that represents the work queued to execute.</returns>
+        /// <seealso cref="BotStateSet" />
+        /// <seealso cref="ConversationState" />
+        /// <seealso cref="IMiddleware" />
         private async Task SendWelcomeMessageAsync(ITurnContext turnContext, CancellationToken cancellationToken)
         {
             foreach (var member in turnContext.Activity.MembersAdded)
-            {
                 if (member.Id != turnContext.Activity.Recipient.Id)
-                {
                     await turnContext.SendActivityAsync(
                         $"Welcome {member.Name}. {_welcomeText}",
                         cancellationToken: cancellationToken);
-                }
-            }
         }
 
         /// <summary>
-        /// Creates an <see cref="Attachment"/> that contains an <see cref="AdaptiveCard"/>.
+        ///     Creates an <see cref="Attachment" /> that contains an <see cref="AdaptiveCard" />.
         /// </summary>
-        /// <param name="filePath">The path to the <see cref="AdaptiveCard"/> json file.</param>
-        /// <returns>An <see cref="Attachment"/> that contains an adaptive card.</returns>
+        /// <param name="filePath">The path to the <see cref="AdaptiveCard" /> json file.</param>
+        /// <returns>An <see cref="Attachment" /> that contains an adaptive card.</returns>
         private static Attachment CreateAdaptiveCardAttachment(string filePath)
         {
             var adaptiveCardJson = File.ReadAllText(filePath);
@@ -838,8 +825,8 @@ namespace SyntinelBot
             strInput = strInput.Trim();
 
             // For both object and array
-            if ((strInput.StartsWith("{") && strInput.EndsWith("}")) || (strInput.StartsWith("[") && strInput.EndsWith("]")))
-            {
+            if (strInput.StartsWith("{") && strInput.EndsWith("}") ||
+                strInput.StartsWith("[") && strInput.EndsWith("]"))
                 try
                 {
                     JToken.Parse(strInput);
@@ -855,7 +842,6 @@ namespace SyntinelBot
                     _logger.LogError(ex.ToString());
                     return false;
                 }
-            }
 
             return false;
         }
