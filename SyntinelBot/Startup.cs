@@ -7,6 +7,7 @@ using System.Linq;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Bot.Builder;
+using Microsoft.Bot.Builder.Azure;
 using Microsoft.Bot.Builder.Integration;
 using Microsoft.Bot.Builder.Integration.AspNet.Core;
 using Microsoft.Bot.Configuration;
@@ -97,8 +98,7 @@ namespace SyntinelBot
 
                 // The Memory Storage used here is for local bot debugging only. When the bot
                 // is restarted, everything stored in memory will be gone.
-                IStorage dataStore = new MemoryStorage();
-                _botStore = dataStore;
+                // IStorage dataStore = new MemoryStorage();
 
                 // For production bots use the Azure Blob or
                 // Azure CosmosDB storage providers. For the Azure
@@ -107,16 +107,22 @@ namespace SyntinelBot
                 // https://www.nuget.org/packages/Microsoft.Bot.Builder.Azure/
                 // Uncomment the following lines to use Azure Blob Storage
                 // //Storage configuration name or ID from the .bot file.
-                // const string StorageConfigurationId = "<STORAGE-NAME-OR-ID-FROM-BOT-FILE>";
-                // var blobConfig = botConfig.FindServiceByNameOrId(StorageConfigurationId);
-                // if (!(blobConfig is BlobStorageService blobStorageConfig))
-                // {
-                //    throw new InvalidOperationException($"The .bot file does not contain an blob storage with name '{StorageConfigurationId}'.");
-                // }
-                // // Default container name.
-                // const string DefaultBotContainer = "<DEFAULT-CONTAINER>";
-                // var storageContainer = string.IsNullOrWhiteSpace(blobStorageConfig.Container) ? DefaultBotContainer : blobStorageConfig.Container;
-                // IStorage dataStore = new Microsoft.Bot.Builder.Azure.AzureBlobStorage(blobStorageConfig.ConnectionString, storageContainer);
+                const string StorageConfigurationId = "SyntinelBot";
+                var cosmoConfig = botConfig.FindServiceByNameOrId(StorageConfigurationId);
+                if (!(cosmoConfig is CosmosDbService cosmoStorageConfig))
+                {
+                    throw new InvalidOperationException($"The .bot file does not contain a cosmo storage with name '{StorageConfigurationId}'.");
+                }
+
+                IStorage dataStore = new CosmosDbStorage(new CosmosDbStorageOptions
+                {
+                    CollectionId = cosmoStorageConfig.Collection,
+                    CosmosDBEndpoint = new Uri(cosmoStorageConfig.Endpoint),
+                    DatabaseId = cosmoStorageConfig.Database,
+                    AuthKey = cosmoStorageConfig.Key,
+                });
+
+                _botStore = dataStore;
 
                 // Create Conversation State object.
                 // The Conversation State object is where we persist anything at the conversation-scope.

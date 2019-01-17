@@ -638,7 +638,7 @@ namespace SyntinelBot
                     MicrosoftAppCredentials.TrustServiceUrl(serviceUrl);
                     var client = new ConnectorClient(new Uri(serviceUrl), account);
                     var conversation =
-                        await client.Conversations.CreateOrGetDirectConversation(botAccount, userAccount, tenantId);
+                        await client.Conversations.CreateOrGetDirectConversationAsync(botAccount, userAccount, tenantId);
                     conversationId = conversation.Id;
                     message.Conversation = new ConversationAccount(id: conversationId);
                     await client.Conversations.SendToConversationAsync((Activity) message);

@@ -22,7 +22,7 @@ namespace SyntinelBot
         /// <param name="user">User to create conversation with.</param>
         /// <param name="tenantId">TenantId of the user.</param>
         /// <returns>Conversation creation or get response.</returns>
-        public static async Task<ConversationResourceResponse> CreateOrGetDirectConversation(this IConversations conversationClient, ChannelAccount bot, ChannelAccount user, string tenantId)
+        public static async Task<ConversationResourceResponse> CreateOrGetDirectConversationAsync(this IConversations conversationClient, ChannelAccount bot, ChannelAccount user, string tenantId)
         {
             var parameters = new ConversationParameters()
             {
