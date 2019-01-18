@@ -27,12 +27,13 @@
     <PackageReference Include="Microsoft.Bot.Schema" Version="4.2.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.AzureAppServices" Version="2.2.0" />
     <PackageReference Include="Newtonsoft.Json" Version="12.0.1" />
-    <PackageReference Include="RestSharp" Version="106.6.6" />
+    <PackageReference Include="RestSharp" Version="106.6.7" />
     <PackageReference Include="StyleCop.Analyzers" Version="1.1.0-beta008" PrivateAssets="all" />
   </ItemGroup>
 
 
   <ItemGroup>
+    <ProjectReference Include="..\AwsAPI\AwsAPI.csproj" />
     <ProjectReference Include="..\SlackAPI\SlackAPI.csproj" />
   </ItemGroup>
 

@@ -8,13 +8,13 @@ using SyntinelBot.Models;
 namespace SyntinelBot
 {
     /// <summary>
-    /// Stored in <see cref="Microsoft.Bot.Builder.UserState"/> and
-    /// backed by <see cref="Microsoft.Bot.Builder.MemoryStorage"/>.
+    ///     Stored in <see cref="Microsoft.Bot.Builder.UserState" /> and
+    ///     backed by <see cref="Microsoft.Bot.Builder.MemoryStorage" />.
     /// </summary>
     public class UserData : IStoreItem
     {
         /// <summary>
-        /// Gets or sets the number of turns in the conversation.
+        ///     Gets or sets the number of turns in the conversation.
         /// </summary>
         /// <value>The number of turns in the conversation.</value>
         public int TurnCount { get; set; } = 0;
@@ -31,18 +31,20 @@ namespace SyntinelBot
 
         public string ChannelId { get; set; }
 
+        public object ChannelData { get; set; }
+
         public List<Job> Jobs { get; set; }
 
         public List<Notification> Notifications { get; set; }
 
         public string ConversationId { get; set; }
 
-        public string ETag { get; set; }
-
         public string MessageText { get; set; }
 
         public object MessageValue { get; set; }
 
         public string MessageValueType { get; set; }
+
+        public string ETag { get; set; }
     }
 }

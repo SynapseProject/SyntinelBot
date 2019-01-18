@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using AwsAPI;
 using Microsoft.Bot.Builder;
 using Microsoft.Bot.Connector;
 using Microsoft.Bot.Connector.Authentication;
@@ -12,6 +13,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using RestSharp;
 using SlackAPI;
 using SyntinelBot.Models;
 using Attachment = Microsoft.Bot.Schema.Attachment;
@@ -46,6 +48,12 @@ namespace SyntinelBot
         private readonly string _slackMention = string.Empty;
         private readonly string _userRegistry = string.Empty;
         private readonly string _welcomeText = string.Empty;
+        private readonly string _syntinelBaseUrl = string.Empty;
+        private readonly string _syntinelSlackCueUrl = string.Empty;
+        private readonly string _syntinelTeamsCueUrl = string.Empty;
+        private readonly string _awsRegion = string.Empty;
+        private readonly string _awsAccessKey = string.Empty;
+        private readonly string _awsSecretKey = string.Empty;
 
         /// <summary>
         ///     Initializes a new instance of the <see cref="SyntinelBot" /> class.
@@ -73,7 +81,12 @@ namespace SyntinelBot
                 _notificationChannels =
                     _config.GetSection("NotificationChannels").Get<List<string>>(); // TODO: Check if it is used?
                 _cardLocation = _config.GetSection("CardLocation")?.Value;
-
+                _syntinelBaseUrl = _config.GetSection("SyntinelBaseUrl")?.Value;
+                _syntinelSlackCueUrl = _config.GetSection("SyntinelSlackCueUrl")?.Value;
+                _syntinelTeamsCueUrl = _config.GetSection("SyntinelTeamsCueUrl")?.Value;
+                _awsRegion = _config.GetSection("AwsRegion")?.Value;
+                _awsAccessKey = _config.GetSection("AwsAccessKey")?.Value;
+                _awsSecretKey = _config.GetSection("AwsSecretKey")?.Value;
                 _logger.LogInformation("Syntinel turn starts.");
                 _logger.LogInformation($"Registered User Count: {_registeredUsers?.Users.Count}");
             }
@@ -201,55 +214,41 @@ namespace SyntinelBot
                 {
                     try
                     {
-                        var channelId = turnContext.Activity.ChannelId;
-                        var userId = turnContext.Activity.From.Id;
-                        var channelData = (JObject)turnContext.Activity.ChannelData;
-                        var slackMessage = channelData.ToObject<ActionUrlInvocation>();
-                        if (slackMessage != null && slackMessage.Payload?.Type == "interactive_message")
+                        if (turnContext.Activity.ChannelData is JObject channelData)
                         {
-                            var firstAction = slackMessage.Payload.Actions?.FirstOrDefault();
-                            if (firstAction != null)
+                            _logger.LogInformation(channelData.ToString(Formatting.Indented));
+                            string answer = "Your response is being processed.";
+                            await turnContext.SendActivityAsync(answer, cancellationToken: cancellationToken);
+
+                            if (!string.IsNullOrWhiteSpace(_syntinelBaseUrl) &&
+                                !string.IsNullOrWhiteSpace(_syntinelSlackCueUrl) &&
+                                !string.IsNullOrWhiteSpace(_awsRegion) &&
+                                !string.IsNullOrWhiteSpace(_awsAccessKey) &&
+                                !string.IsNullOrWhiteSpace(_awsSecretKey))
                             {
-                                string answer;
-                                var action = firstAction.Name;
-                                var instanceType = firstAction.SelectedOptions.FirstOrDefault()?.Value;
-                                var instanceName = slackMessage.Payload.CallbackId.Split('/')[0];
-                                Guid.TryParse(slackMessage.Payload.CallbackId.Split('/')[1], out var notificationId);
-
-                                switch (action)
+                                var client = new RestClient(_syntinelBaseUrl);
+                                AwsApiKey apiKey = new AwsApiKey()
                                 {
-                                    case "resize":
-                                        if (instanceType != "ignore")
-                                        {
-                                            var jobId = Guid.NewGuid();
-                                            if (AcknowledgeNotificationAsync(channelId, userId, notificationId).Result)
-                                            {
-                                                answer =
-                                                    $"Job {jobId} started to {action} {instanceName} from t2.large to {instanceType}.";
-                                                await NotifySyntinelAsync(turnContext, channelId, userId,
-                                                    notificationId, answer);
-                                            }
-                                            else
-                                            {
-                                                answer =
-                                                    "Sorry, I am not able to find matching record for your request.";
-                                            }
-                                        }
-                                        else
-                                        {
-                                            answer = $"Notification to {action} {instanceName} is ignored.";
-                                            await NotifySyntinelAsync(turnContext, channelId, userId, notificationId,
-                                                answer);
-                                        }
+                                    Region = _awsRegion,
+                                    AccessKey = _awsAccessKey,
+                                    SecretKey = _awsSecretKey,
+                                };
+                                client.Authenticator = new Sig4Authenticator(apiKey);
 
-                                        break;
-                                    default:
-                                        answer =
-                                            "I am unable to process your request. Please contact the administrator.";
-                                        break;
-                                }
+                                var jsonString = channelData.ToString(Formatting.Indented);
+                                var request = new RestRequest();
+                                request.AddParameter("application/json", jsonString, ParameterType.RequestBody);
+                                request.Method = Method.POST;
+                                request.Resource = _syntinelSlackCueUrl;
 
-                                await turnContext.SendActivityAsync(answer, cancellationToken: cancellationToken);
+                                // easy async support
+                                client.ExecuteAsync(request, response => {
+                                    _logger.LogInformation(response.Content);
+                                });
+                            }
+                            else
+                            {
+                                _logger.LogError("Unable to post user response to Syntinel. Please check for missing configurations.");
                             }
                         }
                     }
@@ -298,6 +297,7 @@ namespace SyntinelBot
                 state.BotName = turnContext.Activity.Recipient.Name;
                 state.Name = turnContext.Activity.From.Name;
                 state.ChannelId = turnContext.Activity.ChannelId;
+                state.ChannelData = turnContext.Activity.ChannelData;
                 state.ServiceUrl = turnContext.Activity.ServiceUrl;
                 state.ConversationId = turnContext.Activity.Conversation.Id;
                 state.MessageText = turnContext.Activity.Text;
@@ -318,8 +318,9 @@ namespace SyntinelBot
                           $"BotName: {state.BotName} " +
                           $"ChannelId: {state.ChannelId} " +
                           $"ServiceUrl: {state.ServiceUrl} " +
-                          $"Message Text: {state.MessageText} " +
-                          $"Message Value: {state.MessageValue} ";
+                          $"Message Text: {state.MessageText} \n" +
+                          $"Message Value: {state.MessageValue} \n" +
+                          $"Channel Data: {state.ChannelData}";
                 _logger.LogInformation(msg);
             }
             catch (Exception ex)
