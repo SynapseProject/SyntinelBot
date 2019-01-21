@@ -449,9 +449,20 @@ namespace SyntinelBot
                         Id = turnContext.Activity.From.Id,
                         Name = turnContext.Activity.From.Name,
                         ServiceUrl = turnContext.Activity.ServiceUrl,
-                        TenantId = tenantId
+                        TenantId = tenantId,
                     };
                     _registeredUsers.Users.Add(storageKey, newUser);
+
+                    _logger.LogInformation("Saving user registry to database.");
+                    var state = _registeredUsers;
+
+                    // Set the property using the accessor.
+                    await _accessors.UserRegistryAccessor.SetAsync(turnContext, state);
+
+                    // Save the new turn count into the conversation state.
+                    await _accessors.ServiceState.SaveChangesAsync(turnContext);
+
+                    _logger.LogInformation("Saving user registry to file.");
                     var json = JsonConvert.SerializeObject(_registeredUsers, Formatting.Indented);
                     await File.WriteAllTextAsync(_userRegistry, json);
                 }

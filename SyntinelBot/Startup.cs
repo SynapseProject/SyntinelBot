@@ -158,6 +158,7 @@ namespace SyntinelBot
                     UserDataAccessor = _userState.CreateProperty<UserData>(BotAccessors.UserDataName),
                     JobDataAccessor = _serviceState.CreateProperty<Dictionary<string, Job>>(BotAccessors.JobDataName),
                     NotificationDataAccessor = _serviceState.CreateProperty<Dictionary<string, Notification>>(BotAccessors.NotificationDataName),
+                    UserRegistryAccessor = _serviceState.CreateProperty<RegisteredUsers>(BotAccessors.UserRegistryName),
                 };
 
                 return accessors;

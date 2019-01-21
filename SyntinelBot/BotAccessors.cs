@@ -38,6 +38,8 @@ namespace SyntinelBot
 
         public static string NotificationDataName { get; } = "Bot.NotificationData";
 
+        public static string UserRegistryName { get; } = "Bot.UserRegistry";
+
         /// <summary>
         /// Gets or sets the <see cref="IStatePropertyAccessor{T}"/> for CounterState.
         /// </summary>
@@ -49,6 +51,8 @@ namespace SyntinelBot
         public IStatePropertyAccessor<Dictionary<string, Job>> JobDataAccessor { get; set; }
 
         public IStatePropertyAccessor<Dictionary<string, Notification>> NotificationDataAccessor { get; set; }
+
+        public IStatePropertyAccessor<RegisteredUsers> UserRegistryAccessor { get; set; }
 
         /// <summary>
         /// Gets the <see cref="ConversationState"/> object for the conversation.
