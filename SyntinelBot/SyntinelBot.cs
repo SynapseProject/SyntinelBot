@@ -161,9 +161,17 @@ namespace SyntinelBot
                          activityText.ToLowerInvariant()
                              .Replace(_msteamsMention, string.Empty)
                              .Replace(_slackMention, string.Empty)
-                             .Trim(' ', '\r', '\n') == "notifications details")
+                             .Trim(' ', '\r', '\n') == "notifications")
                 {
-                    await ListUserNotificationsAsync(turnContext, true); // TODO: Check if it is still a requirement?
+                    await ListUserNotificationsAsync(turnContext); // Done
+                }
+                else if (!string.IsNullOrWhiteSpace(activityText) &&
+                         activityText.ToLowerInvariant()
+                             .Replace(_msteamsMention, string.Empty)
+                             .Replace(_slackMention, string.Empty)
+                             .Trim(' ', '\r', '\n').StartsWith("/register"))
+                {
+                    await RegisterUsersAsync(turnContext, cancellationToken);
                 }
                 else if (turnContext.Activity.ChannelId == "msteams" && turnContext.Activity.Value != null)
                 {
@@ -277,6 +285,97 @@ namespace SyntinelBot
             {
                 // await turnContext.SendActivityAsync($"{turnContext.Activity.Type} activity detected", cancellationToken: cancellationToken);
             }
+        }
+
+        private async Task RegisterUsersAsync(ITurnContext turnContext, CancellationToken cancellationToken)
+        {
+            if (turnContext == null)
+            {
+                _logger.LogError("TurnContext is null.");
+                return;
+            }
+
+            var answer = string.Empty;
+            var activityText = turnContext.Activity.Text;
+            var args = Regex.Matches(activityText, @"[\""].+?[\""]|[^ ]+")
+                .Select(m => m.Value)
+                .ToList();
+            if (args.Count != 2 || 
+                (!args[1].ToLowerInvariant().EndsWith("@slack") &&
+                !args[1].ToLowerInvariant().EndsWith("@msteams")))
+            {
+                answer = "Syntax: '/register <user alias>' to register your user alias. User alias should be suffixed with '@slack' or '@msteams'";
+            }
+            else
+            {
+                answer = $"Your alias {args[1]} has been registered.";
+//                var userAlias = args[1].ToLowerInvariant();
+//                var pos = userAlias.LastIndexOf('@');
+//                var channelId = pos != -1 ? userAlias.Substring(pos + 1) : string.Empty;
+//
+//                if (!IsRegisteredUser(userAlias))
+//                {
+//                    answer = $"{userAlias} is not a registered user.";
+//                }
+//                else if (!_notificationChannels.Contains(channelId))
+//                {
+//                    answer = "Only channels 'msteams' and 'slack' are supported at the moment.";
+//                }
+//                else if (turnContext.Activity.Value == null)
+//                {
+//                    answer = "Value field is empty. There is no notification to send.";
+//                }
+//                else if (turnContext.Activity.ValueType != null &&
+//                         turnContext.Activity.ValueType.ToLowerInvariant() == "application/json" &&
+//                         !IsValidJson(turnContext.Activity.Value.ToString()))
+//                {
+//                    answer = "The content of the value field is not a valid JSON.";
+//
+//                    // TODO: Add some codes to verify the Slack/Team message content
+//                }
+//                else
+//                {
+//                    var recipient = _registeredUsers.Users.Values.First(a => a.Alias == userAlias);
+//                    if (turnContext.Activity.Value is JObject value)
+//                    {
+//                        var messageContent = value.ToObject<Message>();
+//                        if (messageContent != null && !messageContent.IsEmpty())
+//                        {
+//                            _logger.LogInformation(messageContent.Text);
+//                            foreach (var attachment in messageContent.Attachments)
+//                            {
+//                                foreach (var action in attachment.Actions)
+//                                {
+//                                    _logger.LogInformation($"Action: {action.Name}");
+//                                }
+//                            }
+//
+//                            switch (channelId)
+//                            {
+//                                case "msteams":
+//                                    var notificationId = await SendTeamsInteractiveMessageAsync(null, channelId,
+//                                        string.Empty, string.Empty, recipient, Guid.Empty.ToString());
+//                                    answer = $"Notification {notificationId} has been sent to {userAlias}.";
+//                                    break;
+//                                case "slack":
+//                                    var isSuccess = await SendSlackMessageAsync(recipient, messageContent);
+//                                    answer = isSuccess
+//                                        ? $"Notification has been sent to {userAlias}."
+//                                        : $"Failed to send notification to {userAlias}";
+//                                    break;
+//                            }
+//                        }
+//                    }
+//                    else
+//                    {
+//                        answer = $"Message content is empty. There is nothing to send to {userAlias}.";
+//                    }
+//                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(answer))
+                await turnContext.SendActivityAsync(answer, cancellationToken: cancellationToken);
+
         }
 
         private async Task LogActivityMessageAsync(ITurnContext turnContext)
