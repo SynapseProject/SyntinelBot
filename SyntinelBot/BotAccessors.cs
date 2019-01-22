@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using Microsoft.Bot.Builder;
+using Microsoft.Bot.Builder.Dialogs;
 using SyntinelBot.Models;
 
 namespace SyntinelBot
@@ -40,6 +41,8 @@ namespace SyntinelBot
 
         public static string UserRegistryName { get; } = "Bot.UserRegistry";
 
+        public static string DialogStateName { get; } = "Bot.DialogState";
+
         /// <summary>
         /// Gets or sets the <see cref="IStatePropertyAccessor{T}"/> for CounterState.
         /// </summary>
@@ -53,6 +56,8 @@ namespace SyntinelBot
         public IStatePropertyAccessor<Dictionary<string, Notification>> NotificationDataAccessor { get; set; }
 
         public IStatePropertyAccessor<RegisteredUsers> UserRegistryAccessor { get; set; }
+
+        public IStatePropertyAccessor<DialogState> ConversationDialogState { get; set; }
 
         /// <summary>
         /// Gets the <see cref="ConversationState"/> object for the conversation.

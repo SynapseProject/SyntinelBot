@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Bot.Builder;
 using Microsoft.Bot.Builder.Azure;
+using Microsoft.Bot.Builder.Dialogs;
 using Microsoft.Bot.Builder.Integration;
 using Microsoft.Bot.Builder.Integration.AspNet.Core;
 using Microsoft.Bot.Configuration;
@@ -159,6 +160,7 @@ namespace SyntinelBot
                     JobDataAccessor = _serviceState.CreateProperty<Dictionary<string, Job>>(BotAccessors.JobDataName),
                     NotificationDataAccessor = _serviceState.CreateProperty<Dictionary<string, Notification>>(BotAccessors.NotificationDataName),
                     UserRegistryAccessor = _serviceState.CreateProperty<RegisteredUsers>(BotAccessors.UserRegistryName),
+                    ConversationDialogState = _conversationState.CreateProperty<DialogState>(BotAccessors.DialogStateName),
                 };
 
                 return accessors;

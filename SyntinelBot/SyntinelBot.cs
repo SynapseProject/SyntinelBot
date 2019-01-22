@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AwsAPI;
 using Microsoft.Bot.Builder;
+using Microsoft.Bot.Builder.Dialogs;
 using Microsoft.Bot.Connector;
 using Microsoft.Bot.Connector.Authentication;
 using Microsoft.Bot.Schema;
@@ -54,6 +55,9 @@ namespace SyntinelBot
         private readonly string _awsRegion = string.Empty;
         private readonly string _awsAccessKey = string.Empty;
         private readonly string _awsSecretKey = string.Empty;
+        
+        // The DialogSet that contains all the Dialogs that can be used at runtime.
+        private readonly DialogSet _dialogs = null;
 
         /// <summary>
         ///     Initializes a new instance of the <see cref="SyntinelBot" /> class.
@@ -89,6 +93,17 @@ namespace SyntinelBot
                 _awsSecretKey = _config.GetSection("AwsSecretKey")?.Value;
                 _logger.LogInformation("Syntinel turn starts.");
                 _logger.LogInformation($"Registered User Count: {_registeredUsers?.Users.Count}");
+
+                // The DialogSet needs a DialogState accessor, it will call it when it has a turn context.
+                _dialogs = new DialogSet(accessors.ConversationDialogState);
+
+                // This array defines how the Waterfall will execute.
+                var waterfallSteps = new WaterfallStep[]
+                {
+                    ProcessMessagesAsync,
+                };
+                _dialogs.Add(new WaterfallDialog("processMessages", waterfallSteps));
+                _dialogs.Add(new ConfirmPrompt("confirm"));
             }
             catch (Exception ex)
             {
@@ -119,7 +134,10 @@ namespace SyntinelBot
         /// TODO: WIP
         public async Task OnTurnAsync(ITurnContext turnContext, CancellationToken cancellationToken = default(CancellationToken))
         {
-            if (turnContext == null) throw new ArgumentNullException(nameof(turnContext));
+            if (turnContext == null)
+            {
+                throw new ArgumentNullException(nameof(turnContext));
+            }
 
             await SaveUserIfNewAsync(turnContext);
 
@@ -131,138 +149,24 @@ namespace SyntinelBot
             {
                 await LogActivityMessageAsync(turnContext);
 
-                var activityText = turnContext.Activity.Text;
+                // Run the DialogSet - let the framework identify the current state of the dialog from
+                // the dialog stack and figure out what (if any) is the active dialog.
+                var dialogContext = await _dialogs.CreateContextAsync(turnContext, cancellationToken);
+                var results = await dialogContext.ContinueDialogAsync(cancellationToken);
 
-                if (!string.IsNullOrWhiteSpace(activityText) &&
-                    activityText.ToLowerInvariant()
-                        .Replace(_msteamsMention, string.Empty)
-                        .Replace(_slackMention, string.Empty)
-                        .Trim(' ', '\r', '\n') == "users")
+                // If the DialogTurnStatus is Empty we should start a new dialog.
+                if (results.Status == DialogTurnStatus.Empty)
                 {
-                    await ListRegisteredUsersAsync(turnContext, cancellationToken); // Done
+                    await dialogContext.BeginDialogAsync("processMessages", null, cancellationToken);
                 }
-                else if (!string.IsNullOrWhiteSpace(activityText) &&
-                         activityText.ToLowerInvariant()
-                             .Replace(_msteamsMention, string.Empty)
-                             .Replace(_slackMention, string.Empty)
-                             .Trim(' ', '\r', '\n').StartsWith("notify"))
+                else if (results.Status == DialogTurnStatus.Complete)
                 {
-                    await NotifyUserAsync(turnContext, cancellationToken);
-                }
-                else if (!string.IsNullOrWhiteSpace(activityText) &&
-                         activityText.ToLowerInvariant()
-                             .Replace(_msteamsMention, string.Empty)
-                             .Replace(_slackMention, string.Empty)
-                             .Trim(' ', '\r', '\n') == "notifications")
-                {
-                    await ListUserNotificationsAsync(turnContext); // Done
-                }
-                else if (!string.IsNullOrWhiteSpace(activityText) &&
-                         activityText.ToLowerInvariant()
-                             .Replace(_msteamsMention, string.Empty)
-                             .Replace(_slackMention, string.Empty)
-                             .Trim(' ', '\r', '\n') == "notifications")
-                {
-                    await ListUserNotificationsAsync(turnContext); // Done
-                }
-                else if (!string.IsNullOrWhiteSpace(activityText) &&
-                         activityText.ToLowerInvariant()
-                             .Replace(_msteamsMention, string.Empty)
-                             .Replace(_slackMention, string.Empty)
-                             .Trim(' ', '\r', '\n').StartsWith("/register"))
-                {
-                    await RegisterUsersAsync(turnContext, cancellationToken);
-                }
-                else if (turnContext.Activity.ChannelId == "msteams" && turnContext.Activity.Value != null)
-                {
-                    var channelId = turnContext.Activity.ChannelId;
-                    var userId = turnContext.Activity.From.Id;
-                    var responseValue = (JObject)turnContext.Activity.Value;
-                    try
+                    // Check for a result.
+                    if (results.Result != null)
                     {
-                        var action = responseValue["action"].ToString();
-                        var answer = string.Empty;
-                        var instanceType = responseValue["instanceType"].ToString();
-                        var instanceName = responseValue["instanceName"].ToString();
-                        Guid.TryParse(responseValue["notificationId"].ToString(), out var notificationId);
-
-                        switch (action)
-                        {
-                            case "resize":
-                                var jobId = Guid.NewGuid();
-                                if (AcknowledgeNotificationAsync(channelId, userId, notificationId).Result)
-                                {
-                                    answer =
-                                        $"Job {jobId} started to {action} {instanceName} from t2.large to {instanceType}.";
-                                    await NotifySyntinelAsync(turnContext, channelId, userId, notificationId, answer);
-                                }
-                                else
-                                {
-                                    answer = "Sorry, I am not able to find matching record for your request.";
-                                }
-
-                                break;
-                            case "ignore":
-                                answer = $"Notification to {action} {instanceName} is ignored.";
-                                await NotifySyntinelAsync(turnContext, channelId, userId, notificationId, answer);
-                                break;
-                            default:
-                                answer = "I am unable to process your request. Please contact the administrator.";
-                                break;
-                        }
-
-                        await turnContext.SendActivityAsync(answer);
-                    }
-                    catch (Exception e)
-                    {
-                        _logger.LogError(e.Message);
-                    }
-                }
-                else if (turnContext.Activity.ChannelId == "slack" && turnContext.Activity.ChannelData != null)
-                {
-                    try
-                    {
-                        if (turnContext.Activity.ChannelData is JObject channelData)
-                        {
-                            _logger.LogInformation(channelData.ToString(Formatting.Indented));
-                            string answer = "Your response is being processed.";
-                            await turnContext.SendActivityAsync(answer, cancellationToken: cancellationToken);
-
-                            if (!string.IsNullOrWhiteSpace(_syntinelBaseUrl) &&
-                                !string.IsNullOrWhiteSpace(_syntinelSlackCueUrl) &&
-                                !string.IsNullOrWhiteSpace(_awsRegion) &&
-                                !string.IsNullOrWhiteSpace(_awsAccessKey) &&
-                                !string.IsNullOrWhiteSpace(_awsSecretKey))
-                            {
-                                var client = new RestClient(_syntinelBaseUrl);
-                                AwsApiKey apiKey = new AwsApiKey()
-                                {
-                                    Region = _awsRegion,
-                                    AccessKey = _awsAccessKey,
-                                    SecretKey = _awsSecretKey,
-                                };
-                                client.Authenticator = new Sig4Authenticator(apiKey);
-
-                                var jsonString = channelData.ToString(Formatting.Indented);
-                                var request = new RestRequest();
-                                request.AddParameter("application/json", jsonString, ParameterType.RequestBody);
-                                request.Method = Method.POST;
-                                request.Resource = _syntinelSlackCueUrl;
-
-                                // easy async support
-                                client.ExecuteAsync(request, response => {
-                                    _logger.LogInformation(response.Content);
-                                });
-                            }
-                            else
-                            {
-                                _logger.LogError("Unable to post user response to Syntinel. Please check for missing configurations.");
-                            }
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        _logger.LogError(e.Message);
+                        // Finish by sending a message to the user. Next time ContinueAsync is called it will return DialogTurnStatus.Empty.
+                        // await turnContext.SendActivityAsync(MessageFactory.Text($"Thank you, your response is '{results.Result}'."));
+                        _logger.LogInformation($"Thank you, your response is '{results.Result}'.");
                     }
                 }
             }
@@ -270,7 +174,7 @@ namespace SyntinelBot
             {
                 if (turnContext.Activity.MembersAdded != null)
                 {
-                    // await SendWelcomeMessageAsync(turnContext, cancellationToken);
+                    await SendWelcomeMessageAsync(turnContext, cancellationToken);
                 }
             }
             else if (turnContext.Activity.Type == ActivityTypes.ContactRelationUpdate)
@@ -285,6 +189,9 @@ namespace SyntinelBot
             {
                 // await turnContext.SendActivityAsync($"{turnContext.Activity.Type} activity detected", cancellationToken: cancellationToken);
             }
+
+            // Save the new turn count into the conversation state.
+            await _accessors.ConversationState.SaveChangesAsync(turnContext, false, cancellationToken);
         }
 
         private async Task RegisterUsersAsync(ITurnContext turnContext, CancellationToken cancellationToken)
@@ -906,10 +813,14 @@ namespace SyntinelBot
         private async Task SendWelcomeMessageAsync(ITurnContext turnContext, CancellationToken cancellationToken)
         {
             foreach (var member in turnContext.Activity.MembersAdded)
+            {
                 if (member.Id != turnContext.Activity.Recipient.Id)
-                    await turnContext.SendActivityAsync(
-                        $"Welcome {member.Name}. {_welcomeText}",
-                        cancellationToken: cancellationToken);
+                {
+                    var reply = turnContext.Activity.CreateReply();
+                    reply.Text = $"Welcome {member.Name}. {_welcomeText}";
+                    await turnContext.SendActivityAsync(reply, cancellationToken);
+                }
+            }
         }
 
         /// <summary>
@@ -938,6 +849,7 @@ namespace SyntinelBot
             // For both object and array
             if (strInput.StartsWith("{") && strInput.EndsWith("}") ||
                 strInput.StartsWith("[") && strInput.EndsWith("]"))
+            {
                 try
                 {
                     JToken.Parse(strInput);
@@ -953,8 +865,155 @@ namespace SyntinelBot
                     _logger.LogError(ex.ToString());
                     return false;
                 }
+            }
 
             return false;
+        }
+
+        private async Task<DialogTurnResult> ProcessMessagesAsync(WaterfallStepContext stepContext, CancellationToken cancellationToken)
+        {
+            var turnContext = stepContext.Context;
+            var activityText = turnContext.Activity.Text;
+
+            if (!string.IsNullOrWhiteSpace(activityText) &&
+                activityText.ToLowerInvariant()
+                    .Replace(_msteamsMention, string.Empty)
+                    .Replace(_slackMention, string.Empty)
+                    .Trim(' ', '\r', '\n') == "users")
+            {
+                await ListRegisteredUsersAsync(turnContext, cancellationToken); // Done
+            }
+            else if (!string.IsNullOrWhiteSpace(activityText) &&
+                     activityText.ToLowerInvariant()
+                         .Replace(_msteamsMention, string.Empty)
+                         .Replace(_slackMention, string.Empty)
+                         .Trim(' ', '\r', '\n').StartsWith("notify"))
+            {
+                await NotifyUserAsync(turnContext, cancellationToken);
+            }
+            else if (!string.IsNullOrWhiteSpace(activityText) &&
+                     activityText.ToLowerInvariant()
+                         .Replace(_msteamsMention, string.Empty)
+                         .Replace(_slackMention, string.Empty)
+                         .Trim(' ', '\r', '\n') == "notifications")
+            {
+                await ListUserNotificationsAsync(turnContext); // Done
+            }
+            else if (!string.IsNullOrWhiteSpace(activityText) &&
+                     activityText.ToLowerInvariant()
+                         .Replace(_msteamsMention, string.Empty)
+                         .Replace(_slackMention, string.Empty)
+                         .Trim(' ', '\r', '\n') == "notifications")
+            {
+                await ListUserNotificationsAsync(turnContext); // Done
+            }
+            else if (!string.IsNullOrWhiteSpace(activityText) &&
+                     activityText.ToLowerInvariant()
+                         .Replace(_msteamsMention, string.Empty)
+                         .Replace(_slackMention, string.Empty)
+                         .Trim(' ', '\r', '\n').StartsWith("/register"))
+            {
+                await RegisterUsersAsync(turnContext, cancellationToken);
+            }
+            else if (turnContext.Activity.ChannelId == "msteams" && turnContext.Activity.Value != null)
+            {
+                var channelId = turnContext.Activity.ChannelId;
+                var userId = turnContext.Activity.From.Id;
+                var responseValue = (JObject)turnContext.Activity.Value;
+                try
+                {
+                    var action = responseValue["action"].ToString();
+                    string answer;
+                    var instanceType = responseValue["instanceType"].ToString();
+                    var instanceName = responseValue["instanceName"].ToString();
+                    Guid.TryParse(responseValue["notificationId"].ToString(), out var notificationId);
+
+                    switch (action)
+                    {
+                        case "resize":
+                            var jobId = Guid.NewGuid();
+                            if (AcknowledgeNotificationAsync(channelId, userId, notificationId).Result)
+                            {
+                                answer =
+                                    $"Job {jobId} started to {action} {instanceName} from t2.large to {instanceType}.";
+                                await NotifySyntinelAsync(turnContext, channelId, userId, notificationId, answer);
+                            }
+                            else
+                            {
+                                answer = "Sorry, I am not able to find matching record for your request.";
+                            }
+
+                            break;
+                        case "ignore":
+                            answer = $"Notification to {action} {instanceName} is ignored.";
+                            await NotifySyntinelAsync(turnContext, channelId, userId, notificationId, answer);
+                            break;
+                        default:
+                            answer = "I am unable to process your request. Please contact the administrator.";
+                            break;
+                    }
+
+                    await turnContext.SendActivityAsync(answer, cancellationToken: cancellationToken);
+                }
+                catch (Exception e)
+                {
+                    _logger.LogError(e.Message);
+                }
+            }
+            else if (turnContext.Activity.ChannelId == "slack" && turnContext.Activity.ChannelData != null)
+            {
+                try
+                {
+                    if (turnContext.Activity.ChannelData is JObject channelData)
+                    {
+                        _logger.LogInformation(channelData.ToString(Formatting.Indented));
+                        string answer = "Your response is being processed.";
+                        await turnContext.SendActivityAsync(answer, cancellationToken: cancellationToken);
+
+                        if (!string.IsNullOrWhiteSpace(_syntinelBaseUrl) &&
+                            !string.IsNullOrWhiteSpace(_syntinelSlackCueUrl) &&
+                            !string.IsNullOrWhiteSpace(_awsRegion) &&
+                            !string.IsNullOrWhiteSpace(_awsAccessKey) &&
+                            !string.IsNullOrWhiteSpace(_awsSecretKey))
+                        {
+                            var client = new RestClient(_syntinelBaseUrl);
+                            AwsApiKey apiKey = new AwsApiKey()
+                            {
+                                Region = _awsRegion,
+                                AccessKey = _awsAccessKey,
+                                SecretKey = _awsSecretKey,
+                            };
+                            client.Authenticator = new Sig4Authenticator(apiKey);
+
+                            var jsonString = channelData.ToString(Formatting.Indented);
+                            var request = new RestRequest();
+                            request.AddParameter("application/json", jsonString, ParameterType.RequestBody);
+                            request.Method = Method.POST;
+                            request.Resource = _syntinelSlackCueUrl;
+
+                            // easy async support
+                            client.ExecuteAsync(request, response =>
+                            {
+                                _logger.LogInformation(response.Content);
+                            });
+                        }
+                        else
+                        {
+                            _logger.LogError("Unable to post user response to Syntinel. Please check for missing configurations.");
+                        }
+                    }
+                }
+                catch (Exception e)
+                {
+                    _logger.LogError(e.Message);
+                }
+            }
+
+            // WaterfallStep always finishes with the end of the Waterfall or with another dialog, here it is the end.
+            return await stepContext.EndDialogAsync(cancellationToken: cancellationToken);
+
+            // WaterfallStep always finishes with the end of the Waterfall or with another dialog, here it is a Prompt Dialog.
+            // return await stepContext.PromptAsync("confirm", new PromptOptions { Prompt = MessageFactory.Text("Is this ok?") }, cancellationToken);
         }
     }
 }
