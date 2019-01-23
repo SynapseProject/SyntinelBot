@@ -98,7 +98,6 @@ namespace SyntinelBot
                 }
 
                 _logger.LogInformation("Syntinel turn starts.");
-                _logger.LogInformation($"Registered User Count: {_registeredUsers?.Users.Count}");
 
                 // The DialogSet needs a DialogState accessor, it will call it when it has a turn context.
                 _dialogs = new DialogSet(accessors.ConversationDialogState);
@@ -133,6 +132,7 @@ namespace SyntinelBot
                 _logger.LogInformation("Loading user registry from database...");
                 _registeredUsers = await _accessors.UserRegistryAccessor.GetAsync(turnContext, () => new RegisteredUsers());
 
+                _logger.LogInformation($"Registered User Count: {_registeredUsers?.Users?.Count}");
                 var state = _registeredUsers;
 
                 // Set the property using the accessor.
@@ -484,6 +484,10 @@ namespace SyntinelBot
                     // Save the new turn count into the conversation state.
                     await _accessors.ServiceState.SaveChangesAsync(turnContext);
                 }
+                else
+                {
+                    _logger.LogInformation($"'{turnContext.Activity.From.Name}' is an existing user.");
+                }
             }
             catch (Exception ex)
             {
@@ -735,44 +739,6 @@ namespace SyntinelBot
             return isSuccess;
         }
 
-        private async Task NotifySyntinelAsync(ITurnContext turnContext, string channelId, string userId,
-            Guid notificationId, string txtMessage)
-        {
-            if (_registeredUsers != null)
-                if (!string.IsNullOrWhiteSpace(channelId) && !string.IsNullOrWhiteSpace(userId) &&
-                    notificationId != Guid.Empty)
-                    try
-                    {
-                        // Send notification from SyntinelBot@BP to Syntinel@BP
-                        var syntinelBot = _registeredUsers.Users.Values.First(u => u.Alias == "syntinelbot@directline");
-                        var syntinel = _registeredUsers.Users.Values.First(u => u.Alias == "syntinel@directline");
-                        if (syntinel != null && syntinelBot != null && !string.IsNullOrWhiteSpace(_conversationId))
-                        {
-                            var serviceUrl = syntinel.ServiceUrl;
-                            var botAccount = new ChannelAccount(syntinelBot.Id, syntinelBot.Name);
-                            var userAccount = new ChannelAccount(syntinel.Id, syntinel.Name);
-                            var account = new MicrosoftAppCredentials(_appId, _password);
-                            var tenantId = syntinel.TenantId;
-                            MicrosoftAppCredentials.TrustServiceUrl(serviceUrl);
-                            var client = new ConnectorClient(new Uri(serviceUrl), account);
-
-                            // var conversation = await client.Conversations.CreateOrGetDirectConversation(botAccount, userAccount, tenantId);
-
-                            var message = Activity.CreateMessageActivity();
-                            message.From = botAccount;
-                            message.Recipient = userAccount;
-                            message.Locale = "en-us";
-                            message.Text = txtMessage;
-                            message.Conversation = new ConversationAccount(id: _conversationId);
-                            await client.Conversations.SendToConversationAsync((Activity) message);
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        _logger.LogError(e.Message);
-                    }
-        }
-
         // DONE
         // Check if a user has been registered.
         private bool IsRegisteredUser(string userAlias)
@@ -780,12 +746,16 @@ namespace SyntinelBot
             var foundUser = false;
 
             if (_registeredUsers != null && !string.IsNullOrWhiteSpace(userAlias))
+            {
                 foreach (var user in _registeredUsers.Users)
+                {
                     if (userAlias.ToLowerInvariant() == user.Value.Alias)
                     {
                         foundUser = true;
                         break;
                     }
+                }
+            }
 
             return foundUser;
         }
@@ -948,7 +918,6 @@ namespace SyntinelBot
                             {
                                 answer =
                                     $"Job {jobId} started to {action} {instanceName} from t2.large to {instanceType}.";
-                                await NotifySyntinelAsync(turnContext, channelId, userId, notificationId, answer);
                             }
                             else
                             {
@@ -958,7 +927,6 @@ namespace SyntinelBot
                             break;
                         case "ignore":
                             answer = $"Notification to {action} {instanceName} is ignored.";
-                            await NotifySyntinelAsync(turnContext, channelId, userId, notificationId, answer);
                             break;
                         default:
                             answer = "I am unable to process your request. Please contact the administrator.";
