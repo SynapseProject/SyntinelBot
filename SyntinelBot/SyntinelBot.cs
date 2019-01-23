@@ -46,9 +46,7 @@ namespace SyntinelBot
         private readonly string _msteamsMention = string.Empty;
         private readonly List<string> _notificationChannels;
         private readonly string _password = string.Empty;
-        private RegisteredUsers _registeredUsers;
         private readonly string _slackMention = string.Empty;
-        private readonly string _userRegistry = string.Empty;
         private readonly string _welcomeText = string.Empty;
         private readonly string _syntinelBaseUrl = string.Empty;
         private readonly string _syntinelSlackCueUrl = string.Empty;
@@ -56,6 +54,7 @@ namespace SyntinelBot
         private readonly string _awsRegion = string.Empty;
         private readonly string _awsAccessKey = string.Empty;
         private readonly string _awsSecretKey = string.Empty;
+        private RegisteredUsers _registeredUsers;
 
         // The DialogSet that contains all the Dialogs that can be used at runtime.
         private readonly DialogSet _dialogs = null;
@@ -78,10 +77,9 @@ namespace SyntinelBot
                 _accessors = accessors ?? throw new ArgumentNullException(nameof(accessors));
                 _appId = _config.GetSection("MicrosoftAppId")?.Value;
                 _password = _config.GetSection("MicrosoftAppPassword")?.Value;
-                _userRegistry = _config.GetSection("UserRegistry")?.Value;
                 _welcomeText = _config.GetSection("WelcomeText")?.Value;
-                _msteamsMention = _config.GetSection("MsTeamsMention")?.Value;
-                _slackMention = _config.GetSection("SlackMention")?.Value;
+                _msteamsMention = _config.GetSection("MsTeamsMention")?.Value ?? string.Empty;
+                _slackMention = _config.GetSection("SlackMention")?.Value ?? string.Empty;
                 _notificationChannels =
                     _config.GetSection("NotificationChannels").Get<List<string>>(); // TODO: Check if it is used?
                 _cardLocation = _config.GetSection("CardLocation")?.Value;
