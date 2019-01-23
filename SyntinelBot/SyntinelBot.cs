@@ -10,6 +10,7 @@ using Microsoft.Bot.Builder.Dialogs;
 using Microsoft.Bot.Connector;
 using Microsoft.Bot.Connector.Authentication;
 using Microsoft.Bot.Schema;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -45,7 +46,7 @@ namespace SyntinelBot
         private readonly string _msteamsMention = string.Empty;
         private readonly List<string> _notificationChannels;
         private readonly string _password = string.Empty;
-        private readonly RegisteredUsers _registeredUsers;
+        private RegisteredUsers _registeredUsers;
         private readonly string _slackMention = string.Empty;
         private readonly string _userRegistry = string.Empty;
         private readonly string _welcomeText = string.Empty;
@@ -55,7 +56,7 @@ namespace SyntinelBot
         private readonly string _awsRegion = string.Empty;
         private readonly string _awsAccessKey = string.Empty;
         private readonly string _awsSecretKey = string.Empty;
-        
+
         // The DialogSet that contains all the Dialogs that can be used at runtime.
         private readonly DialogSet _dialogs = null;
 
@@ -77,7 +78,6 @@ namespace SyntinelBot
                 _accessors = accessors ?? throw new ArgumentNullException(nameof(accessors));
                 _appId = _config.GetSection("MicrosoftAppId")?.Value;
                 _password = _config.GetSection("MicrosoftAppPassword")?.Value;
-                _registeredUsers = _config.Get<RegisteredUsers>();
                 _userRegistry = _config.GetSection("UserRegistry")?.Value;
                 _welcomeText = _config.GetSection("WelcomeText")?.Value;
                 _msteamsMention = _config.GetSection("MsTeamsMention")?.Value;
@@ -91,6 +91,12 @@ namespace SyntinelBot
                 _awsRegion = _config.GetSection("AwsRegion")?.Value;
                 _awsAccessKey = _config.GetSection("AwsAccessKey")?.Value;
                 _awsSecretKey = _config.GetSection("AwsSecretKey")?.Value;
+                if (_config.GetSection("UserRegistryInDatabase")?.Value != "true")
+                {
+                    _logger.LogInformation("Loading user registry from appsettings.json...");
+                    _registeredUsers = _config.Get<RegisteredUsers>();
+                }
+
                 _logger.LogInformation("Syntinel turn starts.");
                 _logger.LogInformation($"Registered User Count: {_registeredUsers?.Users.Count}");
 
@@ -112,6 +118,29 @@ namespace SyntinelBot
 
             // TODO: Remmove _botStore
             _botStore = Startup.BotStore;
+        }
+
+        private async Task LoadUserRegistryAsync(ITurnContext turnContext)
+        {
+            if (_registeredUsers == null)
+            {
+                if (_accessors == null)
+                {
+                    _logger.LogError("Database cannot be accessed as accessor is null.");
+                    return;
+                }
+
+                _logger.LogInformation("Loading user registry from database...");
+                _registeredUsers = await _accessors.UserRegistryAccessor.GetAsync(turnContext, () => new RegisteredUsers());
+
+                var state = _registeredUsers;
+
+                // Set the property using the accessor.
+                await _accessors.UserRegistryAccessor.SetAsync(turnContext, state);
+
+                // Save the new turn count into the conversation state.
+                await _accessors.ServiceState.SaveChangesAsync(turnContext);
+            }
         }
 
         /// <summary>
@@ -139,6 +168,7 @@ namespace SyntinelBot
                 throw new ArgumentNullException(nameof(turnContext));
             }
 
+            await LoadUserRegistryAsync(turnContext);
             await SaveUserIfNewAsync(turnContext);
 
             // Handle Message activity type, which is the main activity type for shown within a conversational interface
@@ -202,87 +232,81 @@ namespace SyntinelBot
                 return;
             }
 
-            var answer = string.Empty;
+            if (_registeredUsers?.Users == null)
+            {
+                _logger.LogError("User registry is null.");
+                return;
+            }
+
+            string answer;
             var activityText = turnContext.Activity.Text;
             var args = Regex.Matches(activityText, @"[\""].+?[\""]|[^ ]+")
                 .Select(m => m.Value)
                 .ToList();
-            if (args.Count != 2 || 
-                (!args[1].ToLowerInvariant().EndsWith("@slack") &&
-                !args[1].ToLowerInvariant().EndsWith("@msteams")))
+
+            if (args.Count != 2 ||
+                !args[1].ToLowerInvariant().EndsWith($"@{turnContext.Activity.ChannelId}"))
             {
-                answer = "Syntax: '/register <user alias>' to register your user alias. User alias should be suffixed with '@slack' or '@msteams'";
+                answer = "Syntax: '/register <alias>' to register your user alias. Alias should be suffixed with your respective channel id, '@slack', '@msteams', '@directline'.";
             }
             else
             {
+                var storageKey = $"{turnContext.Activity.ChannelId}/{turnContext.Activity.From.Id}".Replace(":", ";");
+                var userAlias = args[1].ToLowerInvariant();
+
+                // User is new.
+                if (!_registeredUsers.Users.ContainsKey(storageKey))
+                {
+                    _logger.LogInformation("Registering new user with the specified alias...");
+                    var tenantId = string.Empty;
+                    if (turnContext.Activity.ChannelId == "msteams")
+                    {
+                        var channelData = turnContext.Activity.GetChannelData<TeamsChannelData>();
+                        if (channelData != null)
+                        {
+                            tenantId = channelData.Tenant.Id;
+                        }
+                    }
+
+                    var newUser = new User
+                    {
+                        Alias = userAlias,
+                        BotId = turnContext.Activity.Recipient.Id,
+                        BotName = turnContext.Activity.Recipient.Name,
+                        ChannelId = turnContext.Activity.ChannelId,
+                        Id = turnContext.Activity.From.Id,
+                        Name = turnContext.Activity.From.Name,
+                        ServiceUrl = turnContext.Activity.ServiceUrl,
+                        TenantId = tenantId,
+                    };
+                    _registeredUsers.Users.Add(storageKey, newUser);
+                }
+                else
+                {
+                    // Existing user.
+                    _logger.LogInformation("Updating existing user with the specified alias...");
+                    _registeredUsers.Users.TryGetValue(storageKey, out var existingUser);
+                    if (existingUser != null)
+                    {
+                        existingUser.Alias = userAlias;
+                        _registeredUsers.Users[storageKey] = existingUser;
+                    }
+                }
+
+                var state = _registeredUsers;
+
+                // Set the property using the accessor.
+                await _accessors.UserRegistryAccessor.SetAsync(turnContext, state, cancellationToken);
+
+                // Save the new turn count into the conversation state.
+                await _accessors.ServiceState.SaveChangesAsync(turnContext, cancellationToken: cancellationToken);
                 answer = $"Your alias {args[1]} has been registered.";
-//                var userAlias = args[1].ToLowerInvariant();
-//                var pos = userAlias.LastIndexOf('@');
-//                var channelId = pos != -1 ? userAlias.Substring(pos + 1) : string.Empty;
-//
-//                if (!IsRegisteredUser(userAlias))
-//                {
-//                    answer = $"{userAlias} is not a registered user.";
-//                }
-//                else if (!_notificationChannels.Contains(channelId))
-//                {
-//                    answer = "Only channels 'msteams' and 'slack' are supported at the moment.";
-//                }
-//                else if (turnContext.Activity.Value == null)
-//                {
-//                    answer = "Value field is empty. There is no notification to send.";
-//                }
-//                else if (turnContext.Activity.ValueType != null &&
-//                         turnContext.Activity.ValueType.ToLowerInvariant() == "application/json" &&
-//                         !IsValidJson(turnContext.Activity.Value.ToString()))
-//                {
-//                    answer = "The content of the value field is not a valid JSON.";
-//
-//                    // TODO: Add some codes to verify the Slack/Team message content
-//                }
-//                else
-//                {
-//                    var recipient = _registeredUsers.Users.Values.First(a => a.Alias == userAlias);
-//                    if (turnContext.Activity.Value is JObject value)
-//                    {
-//                        var messageContent = value.ToObject<Message>();
-//                        if (messageContent != null && !messageContent.IsEmpty())
-//                        {
-//                            _logger.LogInformation(messageContent.Text);
-//                            foreach (var attachment in messageContent.Attachments)
-//                            {
-//                                foreach (var action in attachment.Actions)
-//                                {
-//                                    _logger.LogInformation($"Action: {action.Name}");
-//                                }
-//                            }
-//
-//                            switch (channelId)
-//                            {
-//                                case "msteams":
-//                                    var notificationId = await SendTeamsInteractiveMessageAsync(null, channelId,
-//                                        string.Empty, string.Empty, recipient, Guid.Empty.ToString());
-//                                    answer = $"Notification {notificationId} has been sent to {userAlias}.";
-//                                    break;
-//                                case "slack":
-//                                    var isSuccess = await SendSlackMessageAsync(recipient, messageContent);
-//                                    answer = isSuccess
-//                                        ? $"Notification has been sent to {userAlias}."
-//                                        : $"Failed to send notification to {userAlias}";
-//                                    break;
-//                            }
-//                        }
-//                    }
-//                    else
-//                    {
-//                        answer = $"Message content is empty. There is nothing to send to {userAlias}.";
-//                    }
-//                }
             }
 
             if (!string.IsNullOrWhiteSpace(answer))
+            {
                 await turnContext.SendActivityAsync(answer, cancellationToken: cancellationToken);
-
+            }
         }
 
         private async Task LogActivityMessageAsync(ITurnContext turnContext)
@@ -425,12 +449,6 @@ namespace SyntinelBot
         /// </summary>
         private async Task SaveUserIfNewAsync(ITurnContext turnContext)
         {
-            if (_userRegistry == null)
-            {
-                _logger.LogWarning("User registry json is not specified.");
-                return;
-            }
-
             try
             {
                 var storageKey = $"{turnContext.Activity.ChannelId}/{turnContext.Activity.From.Id}".Replace(":", ";");
@@ -444,8 +462,6 @@ namespace SyntinelBot
                         if (channelData != null) tenantId = channelData.Tenant.Id;
                     }
 
-                    // TODO: Capture user's Slack team/channel information
-                    // TODO: Store user information in a database, e.g. CosmoDB
                     var newUser = new User
                     {
                         Alias = $"{turnContext.Activity.From.Name}@{turnContext.Activity.ChannelId}".Replace(" ", "_"),
@@ -467,10 +483,6 @@ namespace SyntinelBot
 
                     // Save the new turn count into the conversation state.
                     await _accessors.ServiceState.SaveChangesAsync(turnContext);
-
-                    _logger.LogInformation("Saving user registry to file.");
-                    var json = JsonConvert.SerializeObject(_registeredUsers, Formatting.Indented);
-                    await File.WriteAllTextAsync(_userRegistry, json);
                 }
             }
             catch (Exception ex)
