@@ -354,36 +354,6 @@ namespace SyntinelBot
             }
         }
 
-        // TODO: WIP
-        private async Task<bool> AcknowledgeNotificationAsync(string channelId, string userId, Guid notificationId)
-        {
-            // TODO: Need to handle broadcast message later
-            return true;
-//            bool success = false;
-//            if (!string.IsNullOrWhiteSpace(channelId) && !string.IsNullOrWhiteSpace(userId) && notificationId != Guid.Empty)
-//            {
-//                var storageKey = $"{channelId}/{userId.Replace(":", ";")}.UserState";
-//                var userState = _botStore.ReadAsync<UserState>(new[] { storageKey }).Result?.FirstOrDefault().Value;
-//                if (userState != null)
-//                {
-//                    foreach (var notification in userState.Notifications)
-//                    {
-//                        if (notification.Id == notificationId)
-//                        {
-//                            notification.Acknowledged = true;
-//                            Dictionary<string, object>  changes = new Dictionary<string, object>();
-//                            changes.Add(storageKey, userState);
-//                            await _botStore.WriteAsync(changes);
-//                            success = true;
-//                            break;
-//                        }
-//                    }
-//                }
-//            }
-//
-//            return success;
-        }
-
         /// <summary>
         ///     Capture new user information and writes the whole user list to a json file.
         /// </summary>
@@ -486,30 +456,30 @@ namespace SyntinelBot
                     {
                         if (turnContext.Activity.Value is JObject value)
                         {
-                                bool isSuccess = false;
-                                switch (channelId)
-                                {
-                                    case "msteams":
-                                        var attachment = value.ToObject<AdaptiveCard>();
-                                        if (attachment != null)
-                                        {
-                                            isSuccess = await SendTeamsMessageAsync(recipient, attachment);
-                                        }
+                            bool isSuccess = false;
+                            switch (channelId)
+                            {
+                                case "msteams":
+                                    var attachment = value.ToObject<AdaptiveCard>();
+                                    if (attachment != null)
+                                    {
+                                        isSuccess = await SendTeamsMessageAsync(recipient, attachment);
+                                    }
 
-                                        break;
-                                    case "slack":
-                                        var messageContent = value.ToObject<Message>();
-                                        if (messageContent != null && !messageContent.IsEmpty())
-                                        {
-                                            _logger.LogInformation(messageContent.Text);
-                                            isSuccess = await SendSlackMessageAsync(recipient, messageContent);
-                                        }
+                                    break;
+                                case "slack":
+                                    var messageContent = value.ToObject<Message>();
+                                    if (messageContent != null && !messageContent.IsEmpty())
+                                    {
+                                        _logger.LogInformation(messageContent.Text);
+                                        isSuccess = await SendSlackMessageAsync(recipient, messageContent);
+                                    }
 
-                                        break;
-                                }
+                                    break;
+                            }
 
-                                answer = isSuccess ? $"Notification has been sent to {userAlias}." : 
-                                    $"Failed to send notification to {userAlias}";
+                            answer = isSuccess ? $"Notification has been sent to {userAlias}." :
+                                $"Failed to send notification to {userAlias}";
                         }
                         else
                         {
@@ -557,7 +527,7 @@ namespace SyntinelBot
                 var message = Activity.CreateMessageActivity();
                 message.From = botAccount;
                 message.Recipient = userAccount;
-                message.Attachments = new List<Attachment>() {attachment};
+                message.Attachments = new List<Attachment>() { attachment };
 
                 MicrosoftAppCredentials.TrustServiceUrl(serviceUrl);
                 var account = new MicrosoftAppCredentials(_appId, _password);
@@ -631,7 +601,7 @@ namespace SyntinelBot
                 }
 
                 message.Conversation = new ConversationAccount(id: conversationId);
-                var response = await client.Conversations.SendToConversationAsync((Activity) message);
+                var response = await client.Conversations.SendToConversationAsync((Activity)message);
                 _logger.LogInformation($"Response id: {response.Id}");
                 isSuccess = true;
             }
@@ -785,7 +755,7 @@ namespace SyntinelBot
             {
                 await RegisterUsersAsync(turnContext, cancellationToken);
             }
-            else if (turnContext.Activity.ChannelId == "msteams" && turnContext.Activity.Value != null)
+            else if ((turnContext.Activity.ChannelId == "msteams" || turnContext.Activity.ChannelId == "slack") && turnContext.Activity.Value != null)
             {
                 try
                 {
@@ -810,65 +780,37 @@ namespace SyntinelBot
                             };
                             client.Authenticator = new Sig4Authenticator(apiKey);
 
-                            var jsonString = channelData.ToString(Formatting.Indented);
-                            var request = new RestRequest();
-                            request.AddParameter("application/json", jsonString, ParameterType.RequestBody);
-                            request.Method = Method.POST;
-                            request.Resource = _syntinelSlackCueUrl;
-
-                            // easy async support
-                            client.ExecuteAsync(request, response =>
+                            var relativeUrl = string.Empty;
+                            switch (turnContext.Activity.ChannelId)
                             {
-                                _logger.LogInformation(response.Content);
-                            });
-                        }
-                        else
-                        {
-                            _logger.LogError("Unable to post user response to Syntinel. Please check for missing configurations.");
-                        }
-                    }
-                }
-                catch (Exception e)
-                {
-                    _logger.LogError(e.Message);
-                }
-            }
-            else if (turnContext.Activity.ChannelId == "slack" && turnContext.Activity.ChannelData != null)
-            {
-                try
-                {
-                    if (turnContext.Activity.ChannelData is JObject channelData)
-                    {
-                        _logger.LogInformation(channelData.ToString(Formatting.Indented));
-                        string answer = "Your response is being processed.";
-                        await turnContext.SendActivityAsync(answer, cancellationToken: cancellationToken);
+                                case "slack":
+                                    relativeUrl = _syntinelSlackCueUrl;
+                                    break;
+                                case "msteams":
+                                    relativeUrl = _syntinelTeamsCueUrl;
+                                    break;
+                                default:
+                                    break;
+                            }
 
-                        if (!string.IsNullOrWhiteSpace(_syntinelBaseUrl) &&
-                            !string.IsNullOrWhiteSpace(_syntinelSlackCueUrl) &&
-                            !string.IsNullOrWhiteSpace(_awsRegion) &&
-                            !string.IsNullOrWhiteSpace(_awsAccessKey) &&
-                            !string.IsNullOrWhiteSpace(_awsSecretKey))
-                        {
-                            var client = new RestClient(_syntinelBaseUrl);
-                            AwsApiKey apiKey = new AwsApiKey()
+                            if (!string.IsNullOrWhiteSpace(_syntinelBaseUrl) && !string.IsNullOrWhiteSpace(relativeUrl))
                             {
-                                Region = _awsRegion,
-                                AccessKey = _awsAccessKey,
-                                SecretKey = _awsSecretKey,
-                            };
-                            client.Authenticator = new Sig4Authenticator(apiKey);
+                                var jsonString = channelData.ToString(Formatting.Indented);
+                                var request = new RestRequest();
+                                request.AddParameter("application/json", jsonString, ParameterType.RequestBody);
+                                request.Method = Method.POST;
+                                request.Resource = relativeUrl;
 
-                            var jsonString = channelData.ToString(Formatting.Indented);
-                            var request = new RestRequest();
-                            request.AddParameter("application/json", jsonString, ParameterType.RequestBody);
-                            request.Method = Method.POST;
-                            request.Resource = _syntinelSlackCueUrl;
-
-                            // easy async support
-                            client.ExecuteAsync(request, response =>
+                                // easy async support
+                                client.ExecuteAsync(request, response =>
+                                {
+                                    _logger.LogInformation(response.Content);
+                                });
+                            }
+                            else
                             {
-                                _logger.LogInformation(response.Content);
-                            });
+                                _logger.LogError("Valid Syntinel cue response url is not specified.");
+                            }
                         }
                         else
                         {
