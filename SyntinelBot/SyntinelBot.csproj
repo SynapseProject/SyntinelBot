@@ -35,6 +35,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\AwsAPI\AwsAPI.csproj" />
+    <ProjectReference Include="..\Microsoft.Bot.Connector.Teams\Microsoft.Bot.Connector.Teams.csproj" />
     <ProjectReference Include="..\SlackAPI\SlackAPI.csproj" />
   </ItemGroup>
 

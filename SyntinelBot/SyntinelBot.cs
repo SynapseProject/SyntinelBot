@@ -10,6 +10,7 @@ using Microsoft.Bot.Builder;
 using Microsoft.Bot.Builder.Dialogs;
 using Microsoft.Bot.Connector;
 using Microsoft.Bot.Connector.Authentication;
+using Microsoft.Bot.Connector.Teams.Models;
 using Microsoft.Bot.Schema;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.Extensions.Configuration;
@@ -40,7 +41,6 @@ namespace SyntinelBot
         private readonly BotAccessors _accessors;
         private readonly ILogger<SyntinelBot> _logger;
         private readonly string _appId = string.Empty;
-        private readonly IStorage _botStore;
         private readonly string _cardLocation = string.Empty;
         private readonly IConfiguration _config;
         private readonly string _msteamsMention = "<at>syntinelbot</at>";
@@ -109,9 +109,6 @@ namespace SyntinelBot
             {
                 _logger.LogError(ex.Message);
             }
-
-            // TODO: Remmove _botStore
-            _botStore = Startup.BotStore;
         }
 
         private async Task LoadUserRegistryAsync(ITurnContext turnContext)
@@ -366,10 +363,20 @@ namespace SyntinelBot
                 if (_registeredUsers?.Users != null && !_registeredUsers.Users.ContainsKey(storageKey))
                 {
                     var tenantId = string.Empty;
+                    var teamId = string.Empty;
                     if (turnContext.Activity.ChannelId == "msteams")
                     {
                         var channelData = turnContext.Activity.GetChannelData<TeamsChannelData>();
-                        if (channelData != null) tenantId = channelData.Tenant.Id;
+                        if (channelData != null)
+                        {
+                            tenantId = channelData.Tenant.Id;
+                            teamId = channelData.Team.Id;
+                        }
+                    }
+
+                    if (turnContext.Activity.ChannelId == "slack")
+                    {
+                        teamId = turnContext.Activity.Id?.Split(":").Last();
                     }
 
                     var newUser = new User
@@ -381,6 +388,7 @@ namespace SyntinelBot
                         Id = turnContext.Activity.From.Id,
                         Name = turnContext.Activity.From.Name,
                         ServiceUrl = turnContext.Activity.ServiceUrl,
+                        TeamId = teamId,
                         TenantId = tenantId,
                     };
                     _registeredUsers.Users.Add(storageKey, newUser);
@@ -446,8 +454,6 @@ namespace SyntinelBot
                          !IsValidJson(turnContext.Activity.Value.ToString()))
                 {
                     answer = "The content of the value field is not a valid JSON.";
-
-                    // TODO: Add some codes to verify the Slack/Team message content
                 }
                 else
                 {
@@ -535,21 +541,29 @@ namespace SyntinelBot
 
                 // Reuse existing conversation if recipient is a channel
                 string conversationId;
-                if (recipient.IsChannel)
+                ConversationResourceResponse conversation = null;
+                if (recipient.IsGroupChannel)
                 {
-                    conversationId = recipient.ConversationId;
+                    var conversationParameters = new ConversationParameters
+                    {
+                        IsGroup = true,
+                        ChannelData = new TeamsChannelData
+                        {
+                            Channel = new ChannelInfo(recipient.Id),
+                        },
+                        Activity = (Activity)message,
+                    };
+                    conversation = await client.Conversations.CreateConversationAsync(conversationParameters);
                 }
                 else
                 {
-                    // Note that Async version seems to have bug
-                    var conversation =
-                        await client.Conversations.CreateOrGetDirectConversationAsync(botAccount, userAccount, tenantId);
+                    conversation = client.Conversations.CreateOrGetDirectConversation(botAccount, userAccount, tenantId);
                     conversationId = conversation.Id;
+                    message.Conversation = new ConversationAccount(id: conversationId);
+                    var response = await client.Conversations.SendToConversationAsync((Activity)message);
+                    _logger.LogInformation($"Response id: {response.Id}");
                 }
 
-                message.Conversation = new ConversationAccount(id: conversationId);
-                var response = await client.Conversations.SendToConversationAsync((Activity)message);
-                _logger.LogInformation($"Response id: {response.Id}");
                 isSuccess = true;
             }
             catch (Exception ex)
@@ -590,9 +604,9 @@ namespace SyntinelBot
 
                 // Reuse existing conversation  if recipient is a channel
                 string conversationId;
-                if (recipient.IsChannel)
+                if (recipient.IsGroupChannel)
                 {
-                    conversationId = recipient.ConversationId;
+                    conversationId = recipient.SlackConversationId;
                 }
                 else
                 {
@@ -757,71 +771,7 @@ namespace SyntinelBot
             }
             else if ((turnContext.Activity.ChannelId == "msteams" || turnContext.Activity.ChannelId == "slack") && turnContext.Activity.Value != null)
             {
-                try
-                {
-                    if (turnContext.Activity.ChannelData is JObject channelData)
-                    {
-                        _logger.LogInformation(channelData.ToString(Formatting.Indented));
-                        string answer = "Your response is being processed.";
-                        await turnContext.SendActivityAsync(answer, cancellationToken: cancellationToken);
-
-                        if (!string.IsNullOrWhiteSpace(_syntinelBaseUrl) &&
-                            !string.IsNullOrWhiteSpace(_syntinelSlackCueUrl) &&
-                            !string.IsNullOrWhiteSpace(_awsRegion) &&
-                            !string.IsNullOrWhiteSpace(_awsAccessKey) &&
-                            !string.IsNullOrWhiteSpace(_awsSecretKey))
-                        {
-                            var client = new RestClient(_syntinelBaseUrl);
-                            AwsApiKey apiKey = new AwsApiKey()
-                            {
-                                Region = _awsRegion,
-                                AccessKey = _awsAccessKey,
-                                SecretKey = _awsSecretKey,
-                            };
-                            client.Authenticator = new Sig4Authenticator(apiKey);
-
-                            var relativeUrl = string.Empty;
-                            switch (turnContext.Activity.ChannelId)
-                            {
-                                case "slack":
-                                    relativeUrl = _syntinelSlackCueUrl;
-                                    break;
-                                case "msteams":
-                                    relativeUrl = _syntinelTeamsCueUrl;
-                                    break;
-                                default:
-                                    break;
-                            }
-
-                            if (!string.IsNullOrWhiteSpace(_syntinelBaseUrl) && !string.IsNullOrWhiteSpace(relativeUrl))
-                            {
-                                var jsonString = channelData.ToString(Formatting.Indented);
-                                var request = new RestRequest();
-                                request.AddParameter("application/json", jsonString, ParameterType.RequestBody);
-                                request.Method = Method.POST;
-                                request.Resource = relativeUrl;
-
-                                // easy async support
-                                client.ExecuteAsync(request, response =>
-                                {
-                                    _logger.LogInformation(response.Content);
-                                });
-                            }
-                            else
-                            {
-                                _logger.LogError("Valid Syntinel cue response url is not specified.");
-                            }
-                        }
-                        else
-                        {
-                            _logger.LogError("Unable to post user response to Syntinel. Please check for missing configurations.");
-                        }
-                    }
-                }
-                catch (Exception e)
-                {
-                    _logger.LogError(e.Message);
-                }
+                await ForwardCueResponseAsync(turnContext, cancellationToken);
             }
 
             // WaterfallStep always finishes with the end of the Waterfall or with another dialog, here it is the end.
@@ -829,6 +779,79 @@ namespace SyntinelBot
 
             // WaterfallStep always finishes with the end of the Waterfall or with another dialog, here it is a Prompt Dialog.
             // return await stepContext.PromptAsync("confirm", new PromptOptions { Prompt = MessageFactory.Text("Is this ok?") }, cancellationToken);
+        }
+
+        private async Task ForwardCueResponseAsync(ITurnContext turnContext, CancellationToken cancellationToken)
+        {
+            try
+            {
+                if (turnContext != null && turnContext.Activity.ChannelData is JObject channelData)
+                {
+                    _logger.LogInformation(channelData.ToString(Formatting.Indented));
+                    string answer = "Your response is being processed.";
+                    await turnContext.SendActivityAsync(answer, cancellationToken: cancellationToken);
+
+                    if (!string.IsNullOrWhiteSpace(_syntinelBaseUrl) &&
+                        !string.IsNullOrWhiteSpace(_syntinelSlackCueUrl) &&
+                        !string.IsNullOrWhiteSpace(_awsRegion) &&
+                        !string.IsNullOrWhiteSpace(_awsAccessKey) &&
+                        !string.IsNullOrWhiteSpace(_awsSecretKey))
+                    {
+                        var client = new RestClient(_syntinelBaseUrl);
+                        AwsApiKey apiKey = new AwsApiKey()
+                        {
+                            Region = _awsRegion,
+                            AccessKey = _awsAccessKey,
+                            SecretKey = _awsSecretKey,
+                        };
+                        client.Authenticator = new Sig4Authenticator(apiKey);
+
+                        var relativeUrl = string.Empty;
+                        switch (turnContext.Activity.ChannelId)
+                        {
+                            case "slack":
+                                relativeUrl = _syntinelSlackCueUrl;
+                                break;
+                            case "msteams":
+                                relativeUrl = _syntinelTeamsCueUrl;
+                                break;
+                            default:
+                                break;
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(_syntinelBaseUrl) && !string.IsNullOrWhiteSpace(relativeUrl))
+                        {
+                            var jsonString = channelData.ToString(Formatting.Indented);
+                            var request = new RestRequest();
+                            request.AddParameter("application/json", jsonString, ParameterType.RequestBody);
+                            request.Method = Method.POST;
+                            request.Resource = relativeUrl;
+
+                            // easy async support
+                            client.ExecuteAsync(request, response =>
+                            {
+                                _logger.LogInformation(response.Content);
+                            });
+                        }
+                        else
+                        {
+                            _logger.LogError("Valid Syntinel cue response url is not specified.");
+                        }
+                    }
+                    else
+                    {
+                        _logger.LogError("Unable to post user response to Syntinel. Please check for missing configurations.");
+                    }
+                }
+                else
+                {
+                    _logger.LogError("Unable to obtain channel data from turn context.");
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e.Message);
+            }
         }
     }
 }

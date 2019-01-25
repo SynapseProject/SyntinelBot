@@ -9,7 +9,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SlackAPI", "SlackAPI\SlackA
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SyntinelBot.Tests", "SyntinelBot.Tests\SyntinelBot.Tests.csproj", "{FECA3DE4-A175-4842-8460-023B765AF81D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AwsAPI", "AwsAPI\AwsAPI.csproj", "{B53DE10A-E773-4406-AB0F-87664637D077}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "AwsAPI", "AwsAPI\AwsAPI.csproj", "{B53DE10A-E773-4406-AB0F-87664637D077}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Microsoft.Bot.Connector.Teams", "Microsoft.Bot.Connector.Teams\Microsoft.Bot.Connector.Teams.csproj", "{A41666FC-80AE-48E5-A80E-AAA56C9D8831}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -33,6 +35,10 @@ Global
 		{B53DE10A-E773-4406-AB0F-87664637D077}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B53DE10A-E773-4406-AB0F-87664637D077}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B53DE10A-E773-4406-AB0F-87664637D077}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A41666FC-80AE-48E5-A80E-AAA56C9D8831}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A41666FC-80AE-48E5-A80E-AAA56C9D8831}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A41666FC-80AE-48E5-A80E-AAA56C9D8831}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A41666FC-80AE-48E5-A80E-AAA56C9D8831}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
