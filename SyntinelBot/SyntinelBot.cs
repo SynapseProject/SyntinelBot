@@ -509,7 +509,10 @@ namespace SyntinelBot
         // Forward message to Slack
         private async Task<bool> SendTeamsMessageAsync(User recipient, object messageContent)
         {
-            if (recipient == null || messageContent == null) return false;
+            if (recipient == null || messageContent == null)
+            {
+                return false;
+            }
 
             var isSuccess = false;
 
@@ -527,7 +530,7 @@ namespace SyntinelBot
                 var attachment = new Attachment
                 {
                     ContentType = "application/vnd.microsoft.card.adaptive",
-                    Content = messageContent
+                    Content = messageContent,
                 };
 
                 var message = Activity.CreateMessageActivity();
