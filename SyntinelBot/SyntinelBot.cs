@@ -309,7 +309,7 @@ namespace SyntinelBot
                 var state = await _accessors.UserDataAccessor.GetAsync(turnContext, () => new UserData
                 {
                     Notifications = new List<Notification>(),
-                    Jobs = new List<Job>()
+                    Jobs = new List<Job>(),
                 });
 
                 // Bump the turn count for this conversation.
@@ -772,7 +772,7 @@ namespace SyntinelBot
             {
                 await RegisterUsersAsync(turnContext, cancellationToken);
             }
-            else if ((turnContext.Activity.ChannelId == "msteams" || turnContext.Activity.ChannelId == "slack") && turnContext.Activity.Value != null)
+            else if (turnContext.Activity.ChannelId == "msteams" || turnContext.Activity.ChannelId == "slack")
             {
                 await ForwardCueResponseAsync(turnContext, cancellationToken);
             }
@@ -790,10 +790,6 @@ namespace SyntinelBot
             {
                 if (turnContext != null && turnContext.Activity.ChannelData is JObject channelData)
                 {
-                    _logger.LogInformation(channelData.ToString(Formatting.Indented));
-                    string answer = "Your response is being processed.";
-                    await turnContext.SendActivityAsync(answer, cancellationToken: cancellationToken);
-
                     if (!string.IsNullOrWhiteSpace(_syntinelBaseUrl) &&
                         !string.IsNullOrWhiteSpace(_syntinelSlackCueUrl) &&
                         !string.IsNullOrWhiteSpace(_awsRegion) &&
@@ -810,27 +806,33 @@ namespace SyntinelBot
                         client.Authenticator = new Sig4Authenticator(apiKey);
 
                         var relativeUrl = string.Empty;
+                        var jsonString = string.Empty;
+
                         switch (turnContext.Activity.ChannelId)
                         {
                             case "slack":
                                 relativeUrl = _syntinelSlackCueUrl;
+                                jsonString = channelData.ToString(Formatting.Indented);
                                 break;
                             case "msteams":
                                 relativeUrl = _syntinelTeamsCueUrl;
+                                jsonString = turnContext.Activity.Value?.ToString();
                                 break;
                             default:
                                 break;
                         }
 
-                        if (!string.IsNullOrWhiteSpace(_syntinelBaseUrl) && !string.IsNullOrWhiteSpace(relativeUrl))
+                        if (!string.IsNullOrWhiteSpace(_syntinelBaseUrl) && !string.IsNullOrWhiteSpace(relativeUrl) && !string.IsNullOrWhiteSpace(jsonString))
                         {
-                            var jsonString = channelData.ToString(Formatting.Indented);
+                            string answer = "Your response is being processed.";
+                            await turnContext.SendActivityAsync(answer, cancellationToken: cancellationToken);
+
                             var request = new RestRequest();
                             request.AddParameter("application/json", jsonString, ParameterType.RequestBody);
                             request.Method = Method.POST;
                             request.Resource = relativeUrl;
 
-                            // easy async support
+                            _logger.LogInformation($"Sending below cue response to Syntinel:\n{jsonString}");
                             client.ExecuteAsync(request, response =>
                             {
                                 _logger.LogInformation(response.Content);
