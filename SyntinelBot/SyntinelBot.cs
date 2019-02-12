@@ -360,7 +360,7 @@ namespace SyntinelBot
             {
                 var storageKey = $"{turnContext.Activity.ChannelId}/{turnContext.Activity.From.Id}".Replace(":", ";");
 
-                if (_registeredUsers?.Users != null && !_registeredUsers.Users.ContainsKey(storageKey))
+                if (turnContext.Activity.ChannelId != "directline" && _registeredUsers?.Users != null && !_registeredUsers.Users.ContainsKey(storageKey))
                 {
                     var tenantId = string.Empty;
                     var teamId = string.Empty;
